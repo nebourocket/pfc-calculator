@@ -20,6 +20,9 @@
   var MIN_WEIGH_INS = 4;             // 逆算に必要な、体重を記録した回数
   var MAX_WORKOUT_ITEMS = 50;        // 1日に記録できる筋トレの件数
   var STREAK_MIN_SCORE = 50;         // 連続記録に数える1日のスコアの下限
+  var WEIGHT_CHART_DAYS = 30;        // 体重のグラフに出す日数
+  var CYCLE_SHIFT = 0.1;             // トレ日に上乗せする割合（目標カロリーの10%）
+  var MUSCLES = ["胸", "背中", "脚", "肩", "腕", "腹", "その他"];
   var MAX_MEAL_SETS = 30;            // 登録できるセットの数
   var MAX_SET_ITEMS = 30;            // 1つのセットに入れられる食品の数
 
@@ -213,7 +216,30 @@
     return out;
   }
 
-  // 筋トレの記録：{ "YYYY-MM-DD": [{ id, name, kg, reps, sets }] }
+  // 種目名から部位を推測する。上から順に見て、最初に当たった部位にする（「レッグレイズ」は腹、など）。
+  // 英語の種目名は小文字にして照合する。
+  var MUSCLE_KEYWORDS = [
+    ["脚", ["レッグカール", "レッグエクステンション", "アブダクション", "アダクション", "leg curl"]],
+    ["肩", ["リバースフライ", "リアデルト", "reverse fly", "rear delt"]],
+    ["腹", ["クランチ", "腹筋", "プランク", "レッグレイズ", "シットアップ", "アブ", "crunch", "plank", "sit-up", "ab "]],
+    ["腕", ["トライセプス", "カール", "フレンチ", "キックバック", "プレスダウン", "スカルクラッシャー", "tricep", "curl"]],
+    ["胸", ["ベンチ", "チェスト", "腕立て", "プッシュアップ", "ディップ", "フライ", "ペック", "bench", "chest", "push-up", "pushup", "dip", "fly"]],
+    ["背中", ["デッド", "ロウ", "ローイング", "懸垂", "チンニング", "ラット", "プルダウン", "プルアップ", "背筋", "シュラッグ",
+      "deadlift", "row", "pull", "chin", "lat ", "shrug"]],
+    ["脚", ["スクワット", "レッグ", "ランジ", "カーフ", "ヒップ", "ブルガリアン", "グルート", "squat", "lunge", "leg", "calf", "hip", "glute"]],
+    ["肩", ["ショルダー", "レイズ", "オーバーヘッド", "アップライト", "ミリタリー", "フェイスプル", "shoulder", "lateral", "raise", "overhead", "military"]]
+  ];
+  function guessMuscle(name) {
+    var n = String(name).toLowerCase() + " ";
+    for (var i = 0; i < MUSCLE_KEYWORDS.length; i++) {
+      for (var j = 0; j < MUSCLE_KEYWORDS[i][1].length; j++) {
+        if (n.indexOf(MUSCLE_KEYWORDS[i][1][j]) !== -1) return MUSCLE_KEYWORDS[i][0];
+      }
+    }
+    return "その他";
+  }
+
+  // 筋トレの記録：{ "YYYY-MM-DD": [{ id, name, kg, reps, sets, muscle }] }
   function sanitizeWorkoutItem(x) {
     if (!x || typeof x !== "object") return null;
     var name = typeof x.name === "string" ? x.name.trim().slice(0, 40) : "";
@@ -226,7 +252,8 @@
     if (sets === null || sets < 1 || sets > 100 || Math.floor(sets) !== sets) return null;
     return {
       id: typeof x.id === "string" ? x.id.slice(0, 64) : nextId("w"),
-      name: name, kg: kg, reps: reps, sets: sets
+      name: name, kg: kg, reps: reps, sets: sets,
+      muscle: MUSCLES.indexOf(x.muscle) !== -1 ? x.muscle : guessMuscle(name)
     };
   }
 
@@ -252,7 +279,7 @@
     if (!p || typeof p !== "object") return null;
     var goal = finiteNumber(p.goalWeight);
     if (goal === null || goal < 20 || goal > 300 || !isDateString(p.goalDate)) return null;
-    return { goalWeight: goal, goalDate: p.goalDate };
+    return { goalWeight: goal, goalDate: p.goalDate, cycle: p.cycle === true };
   }
 
   // 1日のスコア：{ "YYYY-MM-DD": 0〜100 }
@@ -511,11 +538,76 @@
     result.plannedWeekly = rate * 7;
     var kcal = tdee + rate * KCAL_PER_KG;
     if (kcal < bmr) { kcal = bmr; result.floored = true; }
-    result.kcal = Math.round(kcal);
+    result.baseKcal = Math.round(kcal);
     result.p = Math.round(weight * 2);
-    result.f = Math.round(result.kcal * 0.25 / 9);
+    result.f = Math.round(result.baseKcal * 0.25 / 9);
+
+    // トレ日と休養日でカロリーを変える。トレ日は +10%、休養日はその分を割り振って減らし、
+    // 1週間の平均は計画どおりにする（運動の消費は TDEE に入っているので、二重には数えない）。
+    // 増減はすべて炭水化物で行う。
+    result.dayType = null;
+    result.cycleDays = null;
+    var dayKcal = result.baseKcal;
+    if (state.plan && state.plan.cycle) {
+      var n = trainingDaysPerWeek(today);
+      result.cycleDays = n;
+      // 休養日が基礎代謝を下回らない範囲に、増減の幅を小さくする（週の平均を崩さないため）。
+      var shift = n > 0 && n < 7
+        ? Math.min(result.baseKcal * CYCLE_SHIFT, (result.baseKcal - bmr) * (7 - n) / n) : 0;
+      result.cycleShift = shift;
+      if (shift >= 1) {
+        var trained = !!(state.workouts[today] && state.workouts[today].length);
+        result.dayType = trained ? "training" : "rest";
+        dayKcal = trained ? result.baseKcal + shift : result.baseKcal - shift * n / (7 - n);
+      }
+    }
+    result.kcal = Math.round(dayKcal);
     result.c = Math.max(0, Math.round((result.kcal - result.p * 4 - result.f * 9) / 4));
     return result;
+  }
+
+  // 直近4週間（今日を除く）に筋トレを記録した日数から、週あたりのトレ日数を出す。
+  function trainingDaysPerWeek(today) {
+    var days = 0;
+    for (var i = 1; i <= 28; i++) {
+      var w = state.workouts[addDays(today, -i)];
+      if (w && w.length) days += 1;
+    }
+    return Math.round(days / 4);
+  }
+
+  // 直近7日（今日を含む）の、部位ごとのセット数。
+  function weeklyVolume(today) {
+    var out = {};
+    MUSCLES.forEach(function (m) { out[m] = 0; });
+    for (var i = 0; i < 7; i++) {
+      (state.workouts[addDays(today, -i)] || []).forEach(function (item) { out[item.muscle] += item.sets; });
+    }
+    return out;
+  }
+
+  // 体重のグラフ用。直近 days 日の体重と7日平均、表示する縦軸の範囲。
+  function buildWeightChart(today, days) {
+    var points = [], avg = [];
+    for (var i = days - 1; i >= 0; i--) {
+      var d = addDays(today, -i);
+      var x = days - 1 - i;
+      if (state.weights[d] !== undefined) points.push({ x: x, y: state.weights[d], date: d });
+      var win = [];
+      for (var k = 0; k < 7; k++) {
+        var v = state.weights[addDays(d, -k)];
+        if (v !== undefined) win.push(v);
+      }
+      if (win.length && state.weights[d] !== undefined) {
+        avg.push({ x: x, y: win.reduce(function (a, b) { return a + b; }, 0) / win.length });
+      }
+    }
+    var ys = points.map(function (p) { return p.y; });
+    var goal = state.plan ? state.plan.goalWeight : null;
+    if (goal !== null && ys.length) ys.push(goal);
+    var yMin = ys.length ? Math.floor(Math.min.apply(null, ys) - 0.5) : 0;
+    var yMax = ys.length ? Math.ceil(Math.max.apply(null, ys) + 0.5) : 1;
+    return { days: days, points: points, avg: avg, goal: goal, yMin: yMin, yMax: yMax };
   }
 
   // 計画があれば、今日の目標を計画から自動で決める。
@@ -959,7 +1051,8 @@
    "score-locked", "score-area", "score-total", "score-items", "score-streak",
    "score-best", "score-sum", "backup-message",
    "food-search", "food-search-count", "sets-locked", "sets-area", "set-name",
-   "set-list", "set-empty", "set-message"
+   "set-list", "set-empty", "set-message",
+   "weight-chart", "weight-chart-note", "plan-cycle", "workout-muscle", "volume-list"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -1252,6 +1345,8 @@
       }));
     });
 
+    renderWeightChart(today);
+
     // 筋トレ
     var dl = els["exercise-names"];
     dl.innerHTML = "";
@@ -1265,7 +1360,7 @@
     list.innerHTML = "";
     els["workout-empty"].classList.toggle("hidden", items.length > 0);
     items.forEach(function (item, i) {
-      var detail = fmt(item.kg, 1) + "kg × " + item.reps + "回 × " + item.sets + "セット ・ 推定1RM " +
+      var detail = item.muscle + " ・ " + fmt(item.kg, 1) + "kg × " + item.reps + "回 × " + item.sets + "セット ・ 推定1RM " +
         fmt(estimated1RM(item), 1) + "kg";
       var prev = previousSession(item.name, today);
       if (prev) {
@@ -1277,12 +1372,45 @@
       list.appendChild(listItem(title, detail, function () {
         state.workouts[today] = (state.workouts[today] || []).filter(function (x) { return x.id !== item.id; });
         if (!state.workouts[today].length) delete state.workouts[today];
+        applyPlanTargets();
         saveState();
         renderAll();
       }));
     });
 
+    // 部位ごとのセット数（直近7日）
+    var vol = weeklyVolume(today);
+    var maxSets = 0;
+    MUSCLES.forEach(function (m) { if (vol[m] > maxSets) maxSets = vol[m]; });
+    var vl = els["volume-list"];
+    vl.innerHTML = "";
+    MUSCLES.forEach(function (m) {
+      if (m === "その他" && !vol[m]) return;
+      var row = document.createElement("div");
+      row.className = "volume-row";
+      var label = document.createElement("span");
+      label.className = "volume-label";
+      label.textContent = m;
+      var track = document.createElement("span");
+      track.className = "volume-track";
+      var bar = document.createElement("span");
+      bar.className = "volume-bar" + (vol[m] >= 10 ? " enough" : "");
+      bar.style.width = (maxSets ? Math.round(vol[m] / Math.max(maxSets, 10) * 100) : 0) + "%";
+      track.appendChild(bar);
+      var num = document.createElement("span");
+      num.className = "volume-num";
+      num.textContent = vol[m] + "セット";
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(num);
+      vl.appendChild(row);
+    });
+
     // 計画
+    // 計画がまだ無いときは、入れかけのチェックを消さない。
+    if (state.plan && (typeof document === "undefined" || document.activeElement !== els["plan-cycle"])) {
+      els["plan-cycle"].checked = !!state.plan.cycle;
+    }
     setFieldUnlessFocused(els["plan-goal"], state.plan ? state.plan.goalWeight : undefined);
     setFieldUnlessFocused(els["plan-date"], state.plan ? state.plan.goalDate : undefined);
     els["plan-clear-button"].classList.toggle("hidden", !state.plan);
@@ -1307,6 +1435,18 @@
         ? "目標 " + fmt(state.plan.goalWeight, 1) + "kg まで あと" + r.daysLeft + "日 ・ 計画 週" +
           signed(r.plannedWeekly, 2) + "kg" + (r.limited ? "（体に無理のない速さに抑えています）" : "")
         : "期限を過ぎたので、今の体重を保つカロリーにしています。");
+      if (state.plan.cycle) {
+        rows.push(r.dayType === null
+          ? (r.cycleDays >= 7
+            ? "トレ日と休養日の切り替え：毎日筋トレしているので、切り替えずに平均のカロリーにしています。"
+            : r.cycleDays > 0
+              ? "トレ日と休養日の切り替え：目標が基礎代謝に近く、休養日を減らす余裕がないので切り替えていません。"
+              : "トレ日と休養日の切り替え：直近4週間の筋トレの記録（週1〜6日）がたまると始まります（今は週0日）。")
+          : (r.dayType === "training"
+            ? "今日はトレ日なので、平均より多めにしています（平均 " + fmt(r.baseKcal, 0) + "kcal、週" + r.cycleDays + "日トレ）。"
+            : "今日は休養日なので、平均より少なめにしています（平均 " + fmt(r.baseKcal, 0) + "kcal、週" + r.cycleDays +
+              "日トレ）。筋トレを記録すると、トレ日のカロリーに変わります。"));
+      }
       rows.push("今日の目標 " + fmt(r.kcal, 0) + "kcal ・ P " + fmt(r.p, 0) + "g ・ F " + fmt(r.f, 0) +
         "g ・ C " + fmt(r.c, 0) + "g" + (r.floored ? "（基礎代謝を下回らないようにしています）" : ""));
       rows.push("目標は計画から毎日自動で決まります。手で決めたいときは「計画をやめる」を押してください。");
@@ -1319,6 +1459,49 @@
       p.textContent = text;
       out.appendChild(p);
     });
+  }
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
+    Object.keys(attrs).forEach(function (k) { el.setAttribute(k, String(attrs[k])); });
+    return el;
+  }
+
+  // 体重のグラフ（SVG）。点＝その日の体重、線＝7日平均、点線＝目標体重。
+  function renderWeightChart(today) {
+    var box = els["weight-chart"];
+    if (!box) return;
+    box.innerHTML = "";
+    var data = buildWeightChart(today, WEIGHT_CHART_DAYS);
+    els["weight-chart-note"].classList.toggle("hidden", data.points.length >= 2);
+    if (data.points.length < 2) return;
+    var W = 320, H = 160, L = 34, R = 8, T = 8, B = 20;
+    function px(x) { return L + (W - L - R) * x / (data.days - 1); }
+    function py(y) { return T + (H - T - B) * (data.yMax - y) / (data.yMax - data.yMin); }
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+      "aria-label": "直近" + data.days + "日の体重のグラフ", "class": "weight-svg" });
+    [data.yMin, (data.yMin + data.yMax) / 2, data.yMax].forEach(function (y) {
+      svg.appendChild(svgEl("line", { x1: L, x2: W - R, y1: py(y), y2: py(y), stroke: "#e8e0d5", "stroke-width": 1 }));
+      var t = svgEl("text", { x: L - 4, y: py(y) + 4, "text-anchor": "end", "font-size": 10, fill: "#6b6259" });
+      t.textContent = fmt(y, 1);
+      svg.appendChild(t);
+    });
+    [0, data.days - 1].forEach(function (x) {
+      var t = svgEl("text", { x: px(x), y: H - 4, "text-anchor": x ? "end" : "start", "font-size": 10, fill: "#6b6259" });
+      t.textContent = shortDate(addDays(today, -(data.days - 1 - x)));
+      svg.appendChild(t);
+    });
+    if (data.goal !== null) {
+      svg.appendChild(svgEl("line", { x1: L, x2: W - R, y1: py(data.goal), y2: py(data.goal),
+        stroke: "#c2703d", "stroke-width": 1.5, "stroke-dasharray": "4 3" }));
+    }
+    data.points.forEach(function (p) {
+      svg.appendChild(svgEl("circle", { cx: px(p.x), cy: py(p.y), r: 2.5, fill: "#a9c48d" }));
+    });
+    svg.appendChild(svgEl("polyline", { fill: "none", stroke: "#4a6b3a", "stroke-width": 2,
+      points: data.avg.map(function (p) { return px(p.x).toFixed(1) + "," + py(p.y).toFixed(1); }).join(" ") }));
+    box.appendChild(svg);
   }
 
   function renderSets() {
@@ -1342,12 +1525,15 @@
       add.className = "entry-add";
       add.textContent = "追加";
       add.addEventListener("click", function () {
+        var added = 0;
         set.items.forEach(function (it) {
-          if (findFood(it.foodId)) state.entries.push({ id: nextId("e"), foodId: it.foodId, grams: it.grams });
+          if (findFood(it.foodId)) { state.entries.push({ id: nextId("e"), foodId: it.foodId, grams: it.grams }); added += 1; }
         });
         saveState();
         renderAll();
-        els["set-message"].textContent = "「" + set.name + "」を今日の記録に追加しました。";
+        els["set-message"].textContent = added
+          ? "「" + set.name + "」を今日の記録に追加しました（" + added + "品）。"
+          : "「" + set.name + "」の食品はすべて消されているため、追加できませんでした。";
       });
       list.appendChild(listItem(set.name, detail, function () {
         if (!window.confirm("セット「" + set.name + "」を消しますか？")) return;
@@ -1577,6 +1763,10 @@
   // ---------- 食品の検索・セット ----------
   if (els["food-search"]) {
     els["food-search"].addEventListener("input", function () { renderSelect(); });
+    // 検索欄で Enter を押しても、食品が勝手に追加されないようにする（変換の確定は邪魔しない）。
+    els["food-search"].addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) e.preventDefault();
+    });
   }
 
   document.getElementById("set-save-form").addEventListener("submit", function (e) {
@@ -1594,7 +1784,8 @@
       items: state.entries.slice(0, MAX_SET_ITEMS).map(function (x) { return { foodId: x.foodId, grams: x.grams }; })
     });
     els["set-name"].value = "";
-    els["set-message"].textContent = "「" + name + "」を登録しました。次からはワンタップで追加できます。";
+    els["set-message"].textContent = "「" + name + "」を登録しました。次からはワンタップで追加できます。" +
+      (state.entries.length > MAX_SET_ITEMS ? "（1つのセットには先頭の" + MAX_SET_ITEMS + "品までが入ります）" : "");
     saveState();
     renderSets();
   });
@@ -1620,7 +1811,8 @@
       name: document.getElementById("workout-name").value,
       kg: parseFloat(document.getElementById("workout-kg").value),
       reps: parseFloat(document.getElementById("workout-reps").value),
-      sets: parseFloat(document.getElementById("workout-sets").value)
+      sets: parseFloat(document.getElementById("workout-sets").value),
+      muscle: els["workout-muscle"].value
     });
     if (!item) {
       els["workout-message"].textContent = "種目名・重量（0〜1000kg）・回数・セット数（整数）を確かめてください。";
@@ -1634,6 +1826,7 @@
     var best = previousBest(item.name, today, items.length);
     items.push(item);
     state.workouts[today] = items;
+    applyPlanTargets();
     els["workout-message"].textContent = best !== null && estimated1RM(item) > best
       ? "★ " + item.name + "の自己ベスト（推定1RM " + fmt(estimated1RM(item), 1) + "kg）を更新しました！" : "";
     saveState();
@@ -1645,7 +1838,8 @@
     if (!state.pro) return;
     var plan = sanitizePlan({
       goalWeight: parseFloat(els["plan-goal"].value),
-      goalDate: els["plan-date"].value
+      goalDate: els["plan-date"].value,
+      cycle: !!els["plan-cycle"].checked
     });
     if (!plan || plan.goalDate <= todayString()) {
       els["plan-message"].textContent = "目標体重（20〜300kg）と、明日以降の期限を入れてください。";
@@ -1653,6 +1847,14 @@
     }
     els["plan-message"].textContent = "";
     state.plan = plan;
+    applyPlanTargets();
+    saveState();
+    renderAll();
+  });
+
+  els["plan-cycle"].addEventListener("change", function () {
+    if (!state.pro || !state.plan) return;
+    state.plan.cycle = !!els["plan-cycle"].checked;
     applyPlanTargets();
     saveState();
     renderAll();

@@ -141,6 +141,8 @@
         <button type="submit" class="btn-primary btn-inline">記録する</button>
       </form>
       <p id="weight-trend" class="note"></p>
+      <div id="weight-chart" class="weight-chart"></div>
+      <p id="weight-chart-note" class="note">体重を2日以上記録すると、グラフが出ます（点＝その日の体重、線＝7日平均、点線＝目標体重）。</p>
       <ul id="weight-list" class="entries"></ul>
 
       <h3 class="subhead">今日の筋トレ</h3>
@@ -163,6 +165,14 @@
             <label for="workout-sets">セット</label>
             <input id="workout-sets" type="number" inputmode="numeric" min="1" max="100" step="1" value="3">
           </div>
+          <div>
+            <label for="workout-muscle">部位</label>
+            <select id="workout-muscle">
+              <option value="">種目名から自動</option>
+              <option>胸</option><option>背中</option><option>脚</option><option>肩</option>
+              <option>腕</option><option>腹</option><option>その他</option>
+            </select>
+          </div>
         </div>
         <button type="submit" class="btn-primary">筋トレを追加する</button>
       </form>
@@ -170,6 +180,10 @@
       <p id="workout-empty" class="empty">今日の筋トレはまだありません。</p>
       <ul id="workout-list" class="entries"></ul>
       <p class="note">推定1RM（1回だけ持ち上げられる重さの目安）は Epley 式（重量×(1＋回数÷30)）で計算しています。</p>
+
+      <h3 class="subhead">部位ごとのセット数（直近7日）</h3>
+      <div id="volume-list" class="volume-list"></div>
+      <p class="note">筋肉を大きくするには、1部位あたり週10セット以上がひとつの目安とされています（Schoenfeld ほか, 2017）。10セットに届いた部位は濃い色になります。</p>
 
       <h3 class="subhead">目標体重と期限</h3>
       <form id="plan-form">
@@ -183,6 +197,7 @@
             <input id="plan-date" type="date">
           </div>
         </div>
+        <label class="check-label"><input id="plan-cycle" type="checkbox"> トレ日は多め・休養日は少なめにする（週の平均は同じ）</label>
         <button type="submit" class="btn-primary">この計画で目標を決める</button>
         <button id="plan-clear-button" class="btn-secondary hidden" type="button">計画をやめる</button>
       </form>

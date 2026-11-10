@@ -43,6 +43,7 @@ class El {
   set innerHTML(v) { if (v === "" || v == null) { this.children = []; this._text = ""; } else { this._text = String(v); } }
   get innerHTML() { return this._text; }
   appendChild(ch) { this.children.push(ch); ch.parent = this; return ch; }
+  setAttribute(k, v) { (this.attrs = this.attrs || {})[k] = String(v); }
   removeChild(ch) {
     this.children = this.children.filter((c) => c !== ch);
     if (ch.parent === this) ch.parent = null;
@@ -688,6 +689,13 @@ function readProCode() {
     check("合計にも反映される", text(env, "total-kcal") === "305");
     byId(env, "set-list").children[0].children[2].click();
     check("セットを消せる", saved().mealSets.length === 0);
+    {
+      const st3 = makeLocalStorage();
+      st3.setItem(STORAGE_KEY, JSON.stringify({ pro: true, mealSets: [{ id: "s1", name: "消えた食品", items: [{ foodId: "custom:gone", grams: 100 }] }] }));
+      const env3 = launch(st3);
+      byId(env3, "set-list").children[0].children[1].click();
+      check("食品がすべて消えたセットは、追加できなかったと伝える", text(env3, "set-message").includes("追加できませんでした"));
+    }
     const free = launch(makeLocalStorage());
     check("無料版ではセットが隠れている", byId(free, "sets-area").classList.contains("hidden"));
   }
@@ -777,6 +785,19 @@ function readProCode() {
       check("プロフィールが無ければ入力を案内する", text(env, "plan-result").includes("性別・年齢・身長"));
     }
 
+    // 計画が無いときのチェックは、ほかの操作で消えない
+    {
+      const st = preset({ profile });
+      const env = launch(st);
+      byId(env, "plan-cycle").checked = true;
+      setVal(env, "weight-input", "70");
+      submit(env, "weight-form");
+      check("計画が無いときのチェックは体重の記録で消えない", byId(env, "plan-cycle").checked === true);
+      setVal(env, "plan-goal", "66"); setVal(env, "plan-date", later(60));
+      submit(env, "plan-form");
+      check("チェックしたまま計画を作ると切り替えがオン", saved(st).plan.cycle === true);
+    }
+
     // 計画の設定と解除
     {
       const st = preset({ profile, weights: { [today]: 70 } });
@@ -822,6 +843,86 @@ function readProCode() {
       setVal(env, "workout-reps", "5"); setVal(env, "workout-sets", "5");
       submit(env, "workout-form");
       check("初めての種目は自己ベスト扱いにしない", !text(env, "workout-message").includes("自己ベスト"));
+    }
+
+    // 部位：自動判定と直近7日のセット数
+    {
+      const st = preset({ workouts: {
+        [ago(2)]: [{ id: "a", name: "ベンチプレス", kg: 60, reps: 10, sets: 4 }, { id: "b", name: "レッグレイズ", kg: 0, reps: 15, sets: 3 }],
+        [ago(9)]: [{ id: "c", name: "スクワット", kg: 80, reps: 5, sets: 5 }] } });
+      const env = launch(st);
+      check("保存済みの記録にも部位を推測して付ける", saved(st).workouts[ago(2)][0].muscle === "胸");
+      check("レッグレイズは脚ではなく腹", saved(st).workouts[ago(2)][1].muscle === "腹");
+      setVal(env, "workout-name", "ブルガリアンスクワット"); setVal(env, "workout-kg", "20");
+      setVal(env, "workout-reps", "10"); setVal(env, "workout-sets", "3"); setVal(env, "workout-muscle", "");
+      submit(env, "workout-form");
+      check("種目名から自動で脚", saved(st).workouts[today][0].muscle === "脚");
+      setVal(env, "workout-name", "オリジナル種目"); setVal(env, "workout-muscle", "肩");
+      submit(env, "workout-form");
+      check("部位を選べばそれを使う", saved(st).workouts[today][1].muscle === "肩");
+      const rows = byId(env, "volume-list").children.map((r) => r.textContent);
+      check("直近7日の胸は4セット", rows.includes("胸4セット"));
+      check("8日以上前は数えない（脚は今日の3セットだけ）", rows.includes("脚3セット"));
+    }
+
+    // 部位の推測の例外
+    {
+      const st = preset({ workouts: { [ago(1)]: [
+        { id: "a", name: "トライセプスディップ", kg: 0, reps: 10, sets: 3 }, { id: "b", name: "リバースフライ", kg: 5, reps: 15, sets: 3 },
+        { id: "c", name: "ヒップアブダクション", kg: 30, reps: 15, sets: 3 }, { id: "d", name: "レッグカール", kg: 30, reps: 12, sets: 3 },
+        { id: "e", name: "Bench Press", kg: 60, reps: 8, sets: 3 }, { id: "f", name: "ハンマーカール", kg: 12, reps: 10, sets: 3 }] } });
+      launch(st);
+      const m = saved(st).workouts[ago(1)].map((x) => x.muscle).join(",");
+      check("部位の推測：腕・肩・脚・脚・胸・腕（" + m + "）", m === "腕,肩,脚,脚,胸,腕");
+    }
+
+    // 体重のグラフ
+    {
+      const env = launch(preset({ weights: { [ago(0)]: 70, [ago(3)]: 71, [ago(40)]: 80 }, plan: { goalWeight: 65, goalDate: later(60) }, profile }));
+      const svg = byId(env, "weight-chart").children[0];
+      check("体重が2日以上あればグラフを描く", !!svg && svg.tagName === "SVG");
+      check("30日より前の体重は点にしない", svg.children.filter((c) => c.tagName === "CIRCLE").length === 2);
+      check("目標体重の点線を引く", svg.children.some((c) => c.tagName === "LINE" && c.attrs["stroke-dasharray"]));
+      check("縦軸の下限は目標体重より下", svg.children.filter((c) => c.tagName === "TEXT").some((t) => t.textContent === "64.0"));
+      const env2 = launch(preset({ weights: { [today]: 70 } }));
+      check("1日分だけならグラフは描かない", byId(env2, "weight-chart").children.length === 0);
+    }
+
+    // トレ日と休養日
+    {
+      const workouts = {};
+      [1, 3, 5, 8, 10, 12, 15, 17, 19, 22, 24, 26].forEach((i) => { workouts[ago(i)] = [{ id: "x" + i, name: "スクワット", kg: 80, reps: 5, sets: 5 }]; });
+      const base = preset({ profile, weights: { [today]: 70 }, workouts, plan: { goalWeight: 70, goalDate: later(30), cycle: false } });
+      launch(base);
+      const baseKcal = saved(base).targets.kcal;
+      const rest = preset({ profile, weights: { [today]: 70 }, workouts, plan: { goalWeight: 70, goalDate: later(30), cycle: true } });
+      const envR = launch(rest);
+      const restKcal = saved(rest).targets.kcal;
+      check("週3日トレの休養日は平均より少なめ", Math.abs(restKcal - Math.round(baseKcal - baseKcal * 0.1 * 3 / 4)) <= 1);
+      check("休養日と表示", text(envR, "plan-result").includes("休養日"));
+      setVal(envR, "workout-name", "スクワット"); setVal(envR, "workout-kg", "80"); setVal(envR, "workout-reps", "5"); setVal(envR, "workout-sets", "5");
+      submit(envR, "workout-form");
+      const trainKcal = saved(rest).targets.kcal;
+      check("筋トレを記録するとトレ日の多めのカロリーになる", Math.abs(trainKcal - Math.round(baseKcal * 1.1)) <= 1);
+      check("週の平均は変わらない（トレ3日＋休養4日）", Math.abs((trainKcal * 3 + restKcal * 4) / 7 - baseKcal) <= 2);
+      check("たんぱく質と脂質は変えず、炭水化物で調整", saved(rest).targets.p === saved(base).targets.p && saved(rest).targets.f === saved(base).targets.f);
+      // 週5日トレ：そのままだと休養日が基礎代謝を下回るので、幅を小さくして週の平均を守る
+      const w5 = {};
+      for (let i = 1; i <= 28; i++) if (i % 7 !== 0 && i % 7 !== 3) w5[ago(i)] = [{ id: "y" + i, name: "スクワット", kg: 80, reps: 5, sets: 5 }];
+      const st5 = preset({ profile, weights: { [today]: 70 }, workouts: w5, plan: { goalWeight: 66, goalDate: later(60), cycle: false } });
+      launch(st5);
+      const base5 = saved(st5).targets.kcal;
+      const r5 = preset({ profile, weights: { [today]: 70 }, workouts: w5, plan: { goalWeight: 66, goalDate: later(60), cycle: true } });
+      const env5 = launch(r5);
+      const rest5 = saved(r5).targets.kcal;
+      check("週5日トレでも休養日は基礎代謝を下回らない", rest5 >= Math.round(bmr(70)) - 1);
+      setVal(env5, "workout-name", "スクワット"); setVal(env5, "workout-kg", "80"); setVal(env5, "workout-reps", "5"); setVal(env5, "workout-sets", "5");
+      submit(env5, "workout-form");
+      const train5 = saved(r5).targets.kcal;
+      check("週5日トレでも週の平均は計画どおり", Math.abs((train5 * 5 + rest5 * 2) / 7 - base5) <= 2);
+      const few = preset({ profile, weights: { [today]: 70 }, plan: { goalWeight: 70, goalDate: later(30), cycle: true } });
+      const envF = launch(few);
+      check("トレの記録が無いあいだは切り替えない", saved(few).targets.kcal === baseKcal && text(envF, "plan-result").includes("たまると始まります"));
     }
 
     // スコアと連続記録
