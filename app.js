@@ -2145,6 +2145,37 @@
     show(saved || "today", false);
   })();
 
+  // 筋トレ種目サーチ (exercise-search) から ?exercise=…&muscle=… 付きで開かれたら、
+  // 「からだ」タブを開いて筋トレのフォームに種目名と部位を入れる。URL からは消しておく。
+  (function handleExerciseLink() {
+    var name = null, muscle = null;
+    try {
+      var params = new URLSearchParams(window.location.search);
+      name = params.get("exercise");
+      muscle = params.get("muscle");
+      if (name !== null || muscle !== null) {
+        params.delete("exercise");
+        params.delete("muscle");
+        if (window.history && window.history.replaceState) {
+          var rest = params.toString();
+          window.history.replaceState(null, "",
+            window.location.pathname + (rest ? "?" + rest : "") + window.location.hash);
+        }
+      }
+    } catch (e) {
+      name = null;
+    }
+    name = typeof name === "string" ? name.trim().slice(0, 40) : "";
+    if (!name) return;
+    var tab = document.querySelector && document.querySelector('.tab[data-tab="body"]');
+    if (tab) tab.click();
+    document.getElementById("workout-name").value = name;
+    els["workout-muscle"].value = MUSCLES.indexOf(muscle) !== -1 ? muscle : "";
+    els["workout-message"].textContent = "「" + name + "」を入れました。重量・回数・セットを入れて追加してください。";
+    var kg = document.getElementById("workout-kg");
+    if (kg.focus) kg.focus();
+  })();
+
   if (els["today-label"]) els["today-label"].textContent = formatDateLabel(todayString());
 
   // ホーム画面に追加したときにオフラインでも開けるよう、Service Worker を登録する（https のときだけ）。

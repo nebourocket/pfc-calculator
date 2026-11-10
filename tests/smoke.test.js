@@ -1123,6 +1123,19 @@ function readProCode() {
       byId(env, "workout-list").children[0].children[1].click();
       check("同じ id の記録があっても1件だけ消える", saved(st).workouts[today].length === 1);
     }
+
+    // 筋トレ種目サーチから ?exercise=&muscle= 付きで開かれたとき
+    {
+      const env = launch(makeLocalStorage(), { search: "?exercise=" + encodeURIComponent("Dumbbell Bench Press") + "&muscle=" + encodeURIComponent("胸") });
+      check("種目サーチの種目名がフォームに入る", byId(env, "workout-name").value === "Dumbbell Bench Press");
+      check("種目サーチの部位がフォームに入る", byId(env, "workout-muscle").value === "胸");
+      check("URL から exercise と muscle を消す", env.replaced.length === 1 && !/exercise|muscle/.test(env.replaced[0]));
+      const bad = launch(makeLocalStorage(), { search: "?exercise=" + "x".repeat(60) + "&muscle=evil" });
+      check("長すぎる種目名は40文字に切る", byId(bad, "workout-name").value.length === 40);
+      check("知らない部位は「種目名から自動」にする", byId(bad, "workout-muscle").value === "");
+      const none = launch(makeLocalStorage());
+      check("パラメータが無ければ URL を触らない", none.replaced.length === 0);
+    }
   }
   console.log("");
   console.log("結果: " + passed + " passed, " + failed + " failed");
