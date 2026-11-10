@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PFCかんたん計算ツール</title>
+<meta name="description" content="食品を選んでグラム数を入れるだけ。カロリーとPFC（たんぱく質・脂質・炭水化物）をかんたんに合計できる、無料の計算ツールです。">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="header">
+  <h1>PFCかんたん計算ツール</h1>
+  <p class="subtitle">食品を選んでグラム数を入れるだけ。今日のカロリーとPFCがひと目でわかります。</p>
+</header>
+
+<main>
+  <!-- 今日の合計 -->
+  <section class="card" id="summary" aria-label="今日の合計">
+    <h2>今日の合計</h2>
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-label">カロリー</span>
+        <span class="stat-value"><span id="total-kcal">0</span> <small>kcal</small></span>
+        <div class="bar"><div class="bar-fill" id="bar-kcal"></div></div>
+        <span class="stat-target">目標 <span id="target-kcal-label">2,000</span> kcal（<span id="pct-kcal">0</span>%）</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">たんぱく質</span>
+        <span class="stat-value"><span id="total-p">0</span> <small>g</small></span>
+        <div class="bar"><div class="bar-fill" id="bar-p"></div></div>
+        <span class="stat-target">目標 <span id="target-p-label">100</span> g（<span id="pct-p">0</span>%）</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">脂質</span>
+        <span class="stat-value"><span id="total-f">0</span> <small>g</small></span>
+        <div class="bar"><div class="bar-fill" id="bar-f"></div></div>
+        <span class="stat-target">目標 <span id="target-f-label">60</span> g（<span id="pct-f">0</span>%）</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">炭水化物</span>
+        <span class="stat-value"><span id="total-c">0</span> <small>g</small></span>
+        <div class="bar"><div class="bar-fill" id="bar-c"></div></div>
+        <span class="stat-target">目標 <span id="target-c-label">250</span> g（<span id="pct-c">0</span>%）</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 食品を追加 -->
+  <section class="card" aria-label="食品を追加">
+    <h2>食品を追加</h2>
+    <form id="add-form">
+      <label for="food-select">食品</label>
+      <select id="food-select"></select>
+      <label for="grams-input">量（g）</label>
+      <input id="grams-input" type="number" inputmode="decimal" min="1" max="5000" step="1" value="100" required>
+      <button type="submit" class="btn-primary">追加する</button>
+    </form>
+    <p class="note">食品データは日本食品標準成分表（八訂）をもとにした概算値です。調理方法や銘柄により前後します。</p>
+  </section>
+
+  <!-- 今日食べたもの -->
+  <section class="card" aria-label="今日食べたもの">
+    <h2>今日食べたもの</h2>
+    <p id="empty-message" class="empty">まだ何も追加されていません。上のフォームから食品を選んでみてください。</p>
+    <ul id="entry-list" class="entries"></ul>
+    <button id="reset-button" class="btn-secondary" type="button">今日の記録をすべて消す</button>
+  </section>
+
+  <!-- 自由枠（自分の食品を登録） -->
+  <section class="card" aria-label="自分の食品を登録">
+    <h2>自分の食品を登録する <span class="tag">自由枠</span></h2>
+    <p class="note">一覧にない食品は、100gあたりの値を入れて登録できます。無料版は5件まで登録できます。</p>
+    <form id="custom-form">
+      <label for="custom-name">食品名</label>
+      <input id="custom-name" type="text" maxlength="30" placeholder="例：自家製カレー" required>
+      <div class="form-row">
+        <div>
+          <label for="custom-kcal">カロリー（kcal / 100g）</label>
+          <input id="custom-kcal" type="number" inputmode="decimal" min="0" max="1000" step="0.1" required>
+        </div>
+        <div>
+          <label for="custom-p">たんぱく質（g / 100g）</label>
+          <input id="custom-p" type="number" inputmode="decimal" min="0" max="100" step="0.1" required>
+        </div>
+        <div>
+          <label for="custom-f">脂質（g / 100g）</label>
+          <input id="custom-f" type="number" inputmode="decimal" min="0" max="100" step="0.1" required>
+        </div>
+        <div>
+          <label for="custom-c">炭水化物（g / 100g）</label>
+          <input id="custom-c" type="number" inputmode="decimal" min="0" max="100" step="0.1" required>
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">登録する</button>
+    </form>
+    <ul id="custom-list" class="entries"></ul>
+    <p id="custom-limit-message" class="note hidden">無料版の登録上限（5件）に達しました。Proでは上限が広がります。</p>
+  </section>
+
+  <!-- 目標設定 -->
+  <section class="card" aria-label="目標設定">
+    <h2>1日の目標を設定する</h2>
+    <form id="target-form">
+      <div class="form-row">
+        <div>
+          <label for="target-kcal">カロリー（kcal）</label>
+          <input id="target-kcal" type="number" inputmode="numeric" min="0" max="10000" step="10" value="2000">
+        </div>
+        <div>
+          <label for="target-p">たんぱく質（g）</label>
+          <input id="target-p" type="number" inputmode="numeric" min="0" max="1000" step="1" value="100">
+        </div>
+        <div>
+          <label for="target-f">脂質（g）</label>
+          <input id="target-f" type="number" inputmode="numeric" min="0" max="1000" step="1" value="60">
+        </div>
+        <div>
+          <label for="target-c">炭水化物（g）</label>
+          <input id="target-c" type="number" inputmode="numeric" min="0" max="1000" step="1" value="250">
+        </div>
+      </div>
+      <p class="note">入力すると自動で保存されます。</p>
+    </form>
+  </section>
+
+  <!-- Pro -->
+  <section class="card pro" aria-label="Proについて">
+    <h2>PFC計算ツール Pro <span class="tag">準備中</span></h2>
+    <p>もっと便利に使いたい方へ。Proでは次の機能が使えるようになります。</p>
+    <ul class="pro-features">
+      <li>毎日の記録を保存して、グラフでふり返る</li>
+      <li>体重や目的から目標カロリー・PFCを自動計算</li>
+      <li>登録できる食品の数を広げる</li>
+      <li>記録をCSVで書き出す</li>
+    </ul>
+    <form id="pro-form">
+      <label for="pro-code">利用コードをお持ちの方はこちら</label>
+      <input id="pro-code" type="text" inputmode="text" autocomplete="off" placeholder="利用コードを入力">
+      <button type="submit" class="btn-primary">Proを有効にする</button>
+    </form>
+    <p id="pro-message" class="note"></p>
+    <p class="note">利用コードは、noteメンバーシップ「寝坊ロケットの創作室」の会員の方へお配りする予定です。詳しくは下のリンクからどうぞ。</p>
+  </section>
+</main>
+
+<footer class="footer">
+  <p>入力したデータは、このブラウザ内にのみ保存されます。サーバーには送られません。</p>
+  <nav>
+    <a href="https://note.com/nebourocket" target="_blank" rel="noopener">note（寝坊ロケット）</a>
+    <a href="https://note.com/nebourocket/membership" target="_blank" rel="noopener">noteメンバーシップ「寝坊ロケットの創作室」</a>
+  </nav>
+  <p class="kindle-note">Kindle『大学院進学を迷っている大学4年生へ』を執筆中です。できあがったら、こちらでもお知らせします。</p>
+  <p class="credit">つくった人：寝坊ロケット（nebourocket）</p>
+</footer>
+
+<script src="foods.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
