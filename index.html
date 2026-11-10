@@ -66,6 +66,14 @@
     <button id="reset-button" class="btn-secondary" type="button">今日の記録をすべて消す</button>
   </section>
 
+  <!-- 過去の記録 -->
+  <section class="card" aria-label="過去の記録">
+    <h2>過去の記録</h2>
+    <p id="history-empty" class="empty">過去の記録はまだありません。日付が変わると、前日までの合計がここに残ります。</p>
+    <ul id="history-list" class="entries"></ul>
+    <p class="note">直近7日分を表示しています。</p>
+  </section>
+
   <!-- 自由枠（自分の食品を登録） -->
   <section class="card" aria-label="自分の食品を登録">
     <h2>自分の食品を登録する <span class="tag">自由枠</span></h2>
@@ -128,7 +136,7 @@
     <h2>PFC計算ツール Pro <span class="tag">準備中</span></h2>
     <p>もっと便利に使いたい方へ。Proでは次の機能が使えるようになります。</p>
     <ul class="pro-features">
-      <li>毎日の記録を保存して、グラフでふり返る</li>
+      <li>過去の記録をグラフでふり返る</li>
       <li>体重や目的から目標カロリー・PFCを自動計算</li>
       <li>登録できる食品の数を広げる</li>
       <li>記録をCSVで書き出す</li>
