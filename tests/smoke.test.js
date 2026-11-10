@@ -81,7 +81,7 @@ const TAG_BY_ID = {
   "history-csv-button": "button", "auto-calc-button": "button",
   "pro-disable-button": "button",
   "weight-form": "form", "workout-form": "form", "plan-form": "form",
-  "plan-clear-button": "button", "backup-export-button": "button",
+  "plan-clear-button": "button", "backup-export-button": "button", "set-save-form": "form",
 };
 
 function makeDocument() {
@@ -249,7 +249,8 @@ console.log("[メインフロー]");
   submit(env, "custom-form");
   check("自由枠が1件登録される", byId(env, "custom-list").children.length === 1);
   const opts = byId(env, "food-select")._options();
-  check("セレクトに自由枠が増える（31件）", opts.length === 31);
+  const foodCount = (() => { const w = {}; new Function("window", foodsCode)(w); return w.FOODS.length; })();
+  check("セレクトに自由枠が増える（" + (foodCount + 1) + "件）", opts.length === foodCount + 1);
   const customOpt = opts[opts.length - 1];
   setVal(env, "food-select", customOpt.value);
   setVal(env, "grams-input", "50");
@@ -647,6 +648,48 @@ function readProCode() {
       byId(env2, "pro-disable-button").dispatch("click");
       check("Proをやめるとキーも消える", JSON.parse(storage.getItem(STORAGE_KEY)).license === null);
     }
+  }
+
+  // ============ 食品の検索・セット ============
+  console.log("[食品の検索・セット]");
+  {
+    const optionValues = (env) => { const out = []; const walk = (el) => el.children.forEach((c) => { if (c.tagName === "OPTION") out.push(c._value); walk(c); }); walk(byId(env, "food-select")); return out; };
+    const env = launch(makeLocalStorage());
+    const search = (q) => { const el = byId(env, "food-search"); el.value = q; el.dispatch("input"); };
+    search("ヨーグルト");
+    check("カタカナで探せる", optionValues(env).length >= 3 && optionValues(env).every((v) => v.startsWith("yogurt")));
+    search("よーぐると");
+    check("ひらがなでもカタカナの食品が見つかる", optionValues(env).includes("yogurt"));
+    search("とり むね");
+    check("空白で区切ったことばで絞り込める（成分表の名前も対象）", optionValues(env).includes("chicken-breast") && !optionValues(env).includes("rice"));
+    check("見つかった件数を表示", text(env, "food-search-count").includes("件見つかりました"));
+    check("見つかった先頭の食品が選ばれる", byId(env, "food-select").value === optionValues(env)[0]);
+    search("ぜったいにないたべもの");
+    check("見つからなければ案内を出す", text(env, "food-search-count").includes("見つかりませんでした"));
+    search("");
+    check("空にすると全部に戻る", optionValues(env).length > 100);
+  }
+  {
+    const st = makeLocalStorage();
+    st.setItem(STORAGE_KEY, JSON.stringify({ pro: true, entries: [{ id: "a", foodId: "rice", grams: 150 }, { id: "b", foodId: "egg", grams: 50 }] }));
+    const env = launch(st);
+    const saved = () => JSON.parse(st.getItem(STORAGE_KEY));
+    setVal(env, "set-name", "");
+    submit(env, "set-save-form");
+    check("名前の無いセットは登録しない", saved().mealSets.length === 0);
+    setVal(env, "set-name", "いつもの朝ごはん");
+    submit(env, "set-save-form");
+    check("今日の記録をセットとして登録できる", saved().mealSets.length === 1 && saved().mealSets[0].items.length === 2);
+    const li = byId(env, "set-list").children[0];
+    check("セットのカロリーを表示（234＋71）", li.textContent.includes("305kcal"));
+    byId(env, "reset-button").click();
+    li.children[1].click();
+    check("追加ボタンでセットの食品が今日の記録に入る", saved().entries.length === 2);
+    check("合計にも反映される", text(env, "total-kcal") === "305");
+    byId(env, "set-list").children[0].children[2].click();
+    check("セットを消せる", saved().mealSets.length === 0);
+    const free = launch(makeLocalStorage());
+    check("無料版ではセットが隠れている", byId(free, "sets-area").classList.contains("hidden"));
   }
 
   // ============ からだの記録・計画・スコア・バックアップ ============

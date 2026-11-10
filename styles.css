@@ -202,6 +202,27 @@ select:focus, input:focus {
   cursor: pointer;
 }
 
+.entry-add {
+  flex-shrink: 0;
+  border: none;
+  background: #5a7d4a;
+  color: #fff;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+input[type="search"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #d8cfc0;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
 .empty {
   color: #6b6259;
   font-size: 0.95rem;

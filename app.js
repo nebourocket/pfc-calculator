@@ -20,6 +20,8 @@
   var MIN_WEIGH_INS = 4;             // 逆算に必要な、体重を記録した回数
   var MAX_WORKOUT_ITEMS = 50;        // 1日に記録できる筋トレの件数
   var STREAK_MIN_SCORE = 50;         // 連続記録に数える1日のスコアの下限
+  var MAX_MEAL_SETS = 30;            // 登録できるセットの数
+  var MAX_SET_ITEMS = 30;            // 1つのセットに入れられる食品の数
 
   // Pro の利用コードは、平文をソースに置かず SHA-256 ハッシュで照合する。
   // ここに登録するのは配布コードのハッシュだけ。平文コードは台帳側
@@ -264,6 +266,27 @@
     return out;
   }
 
+  // よく食べる組み合わせ（セット）：[{ id, name, items: [{ foodId, grams }] }]
+  function sanitizeMealSets(list) {
+    if (!Array.isArray(list)) return [];
+    var out = [];
+    list.forEach(function (x) {
+      if (!x || typeof x !== "object" || out.length >= MAX_MEAL_SETS) return;
+      var name = typeof x.name === "string" ? x.name.trim().slice(0, 30) : "";
+      if (!name || !Array.isArray(x.items)) return;
+      var items = [];
+      x.items.forEach(function (it) {
+        if (!it || typeof it.foodId !== "string" || items.length >= MAX_SET_ITEMS) return;
+        var g = finiteNumber(it.grams);
+        if (g === null || g <= 0 || g > MAX_GRAMS) return;
+        items.push({ foodId: it.foodId.slice(0, 80), grams: g });
+      });
+      if (!items.length) return;
+      out.push({ id: typeof x.id === "string" ? x.id.slice(0, 64) : nextId("s"), name: name, items: items });
+    });
+    return out;
+  }
+
   // 保存データ（またはバックアップ）を、使える形に検証して返す。
   function sanitizeState(parsed) {
     return {
@@ -279,7 +302,8 @@
       weights: sanitizeWeights(parsed.weights),
       workouts: sanitizeWorkouts(parsed.workouts),
       plan: sanitizePlan(parsed.plan),
-      scores: sanitizeScores(parsed.scores)
+      scores: sanitizeScores(parsed.scores),
+      mealSets: sanitizeMealSets(parsed.mealSets)
     };
   }
 
@@ -288,7 +312,7 @@
       entries: [], customFoods: [], targets: sanitizeTargets(null),
       pro: false, day: todayString(), history: {}, profile: null,
       license: null, pendingSession: null,
-      weights: {}, workouts: {}, plan: null, scores: {}
+      weights: {}, workouts: {}, plan: null, scores: {}, mealSets: []
     };
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -933,7 +957,9 @@
    "workout-list", "workout-empty", "exercise-names", "workout-message",
    "plan-goal", "plan-date", "plan-result", "plan-clear-button", "plan-message",
    "score-locked", "score-area", "score-total", "score-items", "score-streak",
-   "score-best", "score-sum", "backup-message"
+   "score-best", "score-sum", "backup-message",
+   "food-search", "food-search-count", "sets-locked", "sets-area", "set-name",
+   "set-list", "set-empty", "set-message"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -962,11 +988,31 @@
     bar.classList.toggle("over", pct > 100);
   }
 
+  // ひらがな・カタカナ・大文字小文字・空白の違いを気にせず探せるようにそろえる。
+  function normalizeForSearch(text) {
+    return String(text).toLowerCase().replace(/[\s\u3000]/g, "")
+      .replace(/[\u30a1-\u30f6]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0x60); });
+  }
+
+  // 空白で区切ったことばが、すべて含まれていれば当たりとする（例：「とり むね」）。
+  function foodMatches(food, words) {
+    if (!words.length) return true;
+    var hay = normalizeForSearch(food.name + " " + (food.source || "") + " " + food.category);
+    return words.every(function (w) { return hay.indexOf(w) !== -1; });
+  }
+
   function renderSelect() {
     var select = els["food-select"];
     var previous = select.value;
     select.innerHTML = "";
-    var foods = allFoodsForSelect();
+    var words = els["food-search"]
+      ? String(els["food-search"].value || "").split(/[\s\u3000]+/).map(normalizeForSearch).filter(Boolean) : [];
+    var foods = allFoodsForSelect().filter(function (food) { return foodMatches(food, words); });
+    if (els["food-search-count"]) {
+      els["food-search-count"].textContent = words.length
+        ? (foods.length ? foods.length + "件見つかりました" : "見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。")
+        : "";
+    }
     var categories = [];
     foods.forEach(function (food) {
       if (categories.indexOf(food.category) === -1) categories.push(food.category);
@@ -983,7 +1029,9 @@
       });
       select.appendChild(group);
     });
-    if (previous) select.value = previous;
+    var stillThere = foods.some(function (f) { return f.id === previous; });
+    if (previous && stillThere) select.value = previous;
+    else if (foods.length) select.value = foods[0].id;
   }
 
   function renderEntries() {
@@ -1143,7 +1191,8 @@
     }
   }
 
-  function listItem(title, detail, onDelete) {
+  // extra を渡すと、削除ボタンの前にそのボタンを置く。
+  function listItem(title, detail, onDelete, extra) {
     var li = document.createElement("li");
     var info = document.createElement("div");
     var name = document.createElement("div");
@@ -1155,6 +1204,7 @@
     info.appendChild(name);
     info.appendChild(sub);
     li.appendChild(info);
+    if (extra) li.appendChild(extra);
     if (onDelete) {
       var del = document.createElement("button");
       del.type = "button";
@@ -1271,6 +1321,43 @@
     });
   }
 
+  function renderSets() {
+    if (!els["sets-locked"]) return;
+    els["sets-locked"].classList.toggle("hidden", state.pro);
+    els["sets-area"].classList.toggle("hidden", !state.pro);
+    if (!state.pro) return;
+    var list = els["set-list"];
+    list.innerHTML = "";
+    els["set-empty"].classList.toggle("hidden", state.mealSets.length > 0);
+    state.mealSets.forEach(function (set) {
+      var kcal = 0, missing = 0;
+      set.items.forEach(function (it) {
+        var v = entryValues(it);
+        if (v) kcal += v.kcal; else missing += 1;
+      });
+      var detail = set.items.length + "品 ・ " + fmt(kcal, 0) + "kcal" +
+        (missing ? "（消した食品" + missing + "品は追加されません）" : "");
+      var add = document.createElement("button");
+      add.type = "button";
+      add.className = "entry-add";
+      add.textContent = "追加";
+      add.addEventListener("click", function () {
+        set.items.forEach(function (it) {
+          if (findFood(it.foodId)) state.entries.push({ id: nextId("e"), foodId: it.foodId, grams: it.grams });
+        });
+        saveState();
+        renderAll();
+        els["set-message"].textContent = "「" + set.name + "」を今日の記録に追加しました。";
+      });
+      list.appendChild(listItem(set.name, detail, function () {
+        if (!window.confirm("セット「" + set.name + "」を消しますか？")) return;
+        state.mealSets = state.mealSets.filter(function (x) { return x.id !== set.id; });
+        saveState();
+        renderSets();
+      }, add));
+    });
+  }
+
   function renderScore() {
     if (!els["score-locked"]) return;
     els["score-locked"].classList.toggle("hidden", state.pro);
@@ -1334,6 +1421,7 @@
     renderPro();
     renderProfile();
     renderBody();
+    renderSets();
   }
 
   // ---------- イベント ----------
@@ -1484,6 +1572,31 @@
   document.getElementById("history-csv-button").addEventListener("click", function () {
     if (!state.pro) return;
     downloadCsv("pfc-history.csv", buildHistoryCsv());
+  });
+
+  // ---------- 食品の検索・セット ----------
+  if (els["food-search"]) {
+    els["food-search"].addEventListener("input", function () { renderSelect(); });
+  }
+
+  document.getElementById("set-save-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!state.pro) return;
+    var name = String(els["set-name"].value || "").trim().slice(0, 30);
+    if (!name) { els["set-message"].textContent = "セットの名前を入れてください（例：朝ごはん）。"; return; }
+    if (!state.entries.length) { els["set-message"].textContent = "今日の記録が空です。先に食品を追加してください。"; return; }
+    if (state.mealSets.length >= MAX_MEAL_SETS) {
+      els["set-message"].textContent = "セットは" + MAX_MEAL_SETS + "個まで登録できます。";
+      return;
+    }
+    state.mealSets.push({
+      id: nextId("s"), name: name,
+      items: state.entries.slice(0, MAX_SET_ITEMS).map(function (x) { return { foodId: x.foodId, grams: x.grams }; })
+    });
+    els["set-name"].value = "";
+    els["set-message"].textContent = "「" + name + "」を登録しました。次からはワンタップで追加できます。";
+    saveState();
+    renderSets();
   });
 
   // ---------- からだの記録（Pro） ----------
