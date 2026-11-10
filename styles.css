@@ -525,3 +525,8 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* 種目欄の見出しと「種目を探す」リンクを横に並べる */
+.label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.label-row label { margin-top: 0; }
+.find-link { font-size: 0.82rem; font-weight: 700; color: var(--brand); }
