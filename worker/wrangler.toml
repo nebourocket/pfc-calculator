@@ -1,0 +1,13 @@
+# Cloudflare Workers の設定 (無料プランで動きます)
+# 秘密の値 (STRIPE_SECRET_KEY・LICENSE_PRIVATE_JWK) はここに書かず、
+# `npx wrangler secret put <名前>` で登録してください。
+name = "pfc-license"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://nebourocket.github.io"
+PRICE_JPY = "500"
+# Payment Link の ID (plink_...)。このリンク経由の支払いだけを認めます。空のあいだはキーを発行しません。
+PAYMENT_LINK_ID = ""
