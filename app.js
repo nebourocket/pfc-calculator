@@ -23,6 +23,7 @@
   var WEIGHT_CHART_DAYS = 30;        // 体重のグラフに出す日数
   var CYCLE_SHIFT = 0.1;             // トレ日に上乗せする割合（目標カロリーの10%）
   var MUSCLES = ["胸", "背中", "脚", "肩", "腕", "腹", "その他"];
+  var MAX_SEARCH_RESULTS = 100;      // 食品の検索で一度に出す件数
   var MAX_MEAL_SETS = 30;            // 登録できるセットの数
   var MAX_SET_ITEMS = 30;            // 1つのセットに入れられる食品の数
 
@@ -1087,11 +1088,41 @@
       .replace(/[\u30a1-\u30f6]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0x60); });
   }
 
+  // ふだんの言い方と、成分表の正式名の言い方の対応（「ごはん」で「めし」も探す、など）。
+  var SEARCH_ALIASES = {
+    "ごはん": ["めし"], "ご飯": ["めし"], "白米": ["精白米"], "ライス": ["めし"],
+    "とり": ["にわとり", "鶏"], "鶏肉": ["にわとり"], "とりにく": ["にわとり"], "鶏": ["にわとり"],
+    "ぶたにく": ["ぶた"], "豚肉": ["ぶた"], "豚": ["ぶた"],
+    "ぎゅうにく": ["うし"], "牛肉": ["うし"], "牛": ["うし"],
+    "たまご": ["鶏卵"], "卵": ["鶏卵"], "玉子": ["鶏卵"],
+    "鮭": ["さけ"], "サーモン": ["さけ", "サーモン"], "ラーメン": ["中華めん"], "スパゲッティ": ["スパゲッティ"],
+    "パスタ": ["スパゲッティ", "マカロニ"], "みかん": ["うんしゅうみかん"], "じゃがいも": ["じゃがいも"],
+    "牛乳": ["普通牛乳"], "ぎゅうにゅう": ["普通牛乳"], "ミルク": ["普通牛乳"]
+  };
+  var NORMALIZED_ALIASES = {};
+  Object.keys(SEARCH_ALIASES).forEach(function (k) {
+    NORMALIZED_ALIASES[normalizeForSearch(k)] = SEARCH_ALIASES[k].map(normalizeForSearch);
+  });
+
+  // 検索用の文字列は、食品ごとに一度だけ作って使い回す（2,500品あるため）。
+  var haystackCache = {};
+  function haystack(food) {
+    var key = food.id + "|" + food.name;
+    if (!haystackCache[key]) {
+      haystackCache[key] = normalizeForSearch(food.name + " " + (food.source || "") + " " + food.category);
+    }
+    return haystackCache[key];
+  }
+
   // 空白で区切ったことばが、すべて含まれていれば当たりとする（例：「とり むね」）。
+  // ことばごとに、言い換え（SEARCH_ALIASES）のどれかが含まれていてもよい。
   function foodMatches(food, words) {
     if (!words.length) return true;
-    var hay = normalizeForSearch(food.name + " " + (food.source || "") + " " + food.category);
-    return words.every(function (w) { return hay.indexOf(w) !== -1; });
+    var hay = haystack(food);
+    return words.every(function (w) {
+      if (hay.indexOf(w) !== -1) return true;
+      return (NORMALIZED_ALIASES[w] || []).some(function (a) { return hay.indexOf(a) !== -1; });
+    });
   }
 
   function renderSelect() {
@@ -1100,11 +1131,27 @@
     select.innerHTML = "";
     var words = els["food-search"]
       ? String(els["food-search"].value || "").split(/[\s\u3000]+/).map(normalizeForSearch).filter(Boolean) : [];
-    var foods = allFoodsForSelect().filter(function (food) { return foodMatches(food, words); });
+    // 何も探していないときは「よく使う食品」と自分の食品だけ。探したときは成分表の全食品から、
+    // よく使う食品・自分の食品を先にして最大 MAX_SEARCH_RESULTS 件を出す。
+    var all = allFoodsForSelect();
+    var foods;
+    if (!words.length) {
+      foods = all.filter(function (food) { return food.common || food.category === "自分の食品"; });
+    } else {
+      var hits = all.filter(function (food) { return foodMatches(food, words); });
+      var first = hits.filter(function (f) { return f.common || f.category === "自分の食品"; });
+      var rest = hits.filter(function (f) { return !(f.common || f.category === "自分の食品"); });
+      foods = first.concat(rest).slice(0, MAX_SEARCH_RESULTS);
+      var total = hits.length;
+    }
     if (els["food-search-count"]) {
-      els["food-search-count"].textContent = words.length
-        ? (foods.length ? foods.length + "件見つかりました" : "見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。")
-        : "";
+      els["food-search-count"].textContent = !words.length
+        ? "よく使う食品を表示しています。ほかの食品（成分表の全" + FOODS.length + "品）は、上の欄で探せます。"
+        : !foods.length
+          ? "見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。"
+          : total > MAX_SEARCH_RESULTS
+            ? total + "件見つかりました（先頭の" + MAX_SEARCH_RESULTS + "件を表示。ことばを足すと絞り込めます）"
+            : total + "件見つかりました";
     }
     var categories = [];
     foods.forEach(function (food) {
