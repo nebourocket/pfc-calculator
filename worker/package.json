@@ -1,0 +1,9 @@
+{
+  "name": "pfc-license",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/license.test.mjs",
+    "deploy": "npx wrangler@3 deploy"
+  }
+}

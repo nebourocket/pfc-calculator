@@ -130,9 +130,17 @@ function makeLocalStorage() {
 }
 
 // アプリを新しいDOMで起動する（localStorageは渡したものを共有＝リロード再現）。
-function launch(storage) {
+// opts: config（window.PFC_CONFIG）・search（URL の ?以降）・fetch（フェイク）
+function launch(storage, opts) {
+  opts = opts || {};
   const documentStub = makeDocument();
-  const windowStub = { confirm: () => true };
+  const replaced = [];
+  const windowStub = {
+    confirm: () => true,
+    PFC_CONFIG: opts.config,
+    location: { search: opts.search || "", pathname: "/pfc-calculator/", hash: "" },
+    history: { replaceState: (a, b, url) => replaced.push(url) },
+  };
   const sandbox = {
     window: windowStub,
     document: documentStub,
@@ -141,11 +149,14 @@ function launch(storage) {
     Blob: FakeBlob,
     URL: FakeURL,
     setTimeout,
+    crypto: globalThis.crypto,
+    TextEncoder, TextDecoder, atob, URLSearchParams,
+    fetch: opts.fetch,
   };
   vm.createContext(sandbox);
   vm.runInContext(foodsCode, sandbox);
   vm.runInContext(appCode, sandbox);
-  return { document: documentStub, storage };
+  return { document: documentStub, storage, replaced };
 }
 
 // ---------- テストユーティリティ ----------
@@ -504,6 +515,137 @@ function readProCode() {
     check("履歴CSVに今日の行がある", histCsv.includes(dayStr(new Date()) + ",234"));
   }
 
+
+  // ============ 買い切り Pro（Stripe 決済 → ライセンスキー） ============
+  console.log("[買い切り Pro]");
+  {
+    const flush = () => new Promise((r) => setTimeout(r, 30));
+    const { issueLicense } = await import(path.join(ROOT, "worker", "src", "index.js"));
+    const pair = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    const privText = JSON.stringify(await crypto.subtle.exportKey("jwk", pair.privateKey));
+    const pubJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    const config = {
+      paymentLinkUrl: "https://buy.stripe.com/test_abc",
+      licenseApiUrl: "https://pfc-license.example.workers.dev/license",
+      licensePublicJwk: pubJwk,
+    };
+    const SID = "cs_test_a1B2c3D4e5F6g7H8i9J0";
+    const license = await issueLicense(SID, privText);
+
+    // 設定が空なら、購入ボタンは出さず「準備中」
+    {
+      const env = launch(makeLocalStorage());
+      check("設定が空なら購入ボタンは隠れる", byId(env, "buy-area").classList.contains("hidden"));
+      check("設定が空なら準備中と表示", !byId(env, "buy-pending").classList.contains("hidden"));
+    }
+    // Stripe 以外の決済 URL は受け付けない
+    {
+      const env = launch(makeLocalStorage(), { config: { ...config, paymentLinkUrl: "https://evil.example/pay" } });
+      check("Stripe 以外の URL では購入ボタンを出さない", byId(env, "buy-area").classList.contains("hidden"));
+    }
+    // 設定があれば購入ボタンが Payment Link を指す
+    {
+      const env = launch(makeLocalStorage(), { config });
+      check("設定があれば購入ボタンが見える", !byId(env, "buy-area").classList.contains("hidden"));
+      check("購入ボタンは Payment Link を指す", byId(env, "buy-link").href === config.paymentLinkUrl);
+    }
+
+    // Stripe から戻ってくる → Worker からキーを受け取る → Pro が有効
+    const storage = makeLocalStorage();
+    const calls = [];
+    const okFetch = async (url) => {
+      calls.push(url);
+      return { status: 200, json: async () => ({ license }) };
+    };
+    const env = launch(storage, { config, search: "?session_id=" + SID, fetch: okFetch });
+    await flush();
+    check("戻ってきたら URL から session_id を消す", env.replaced.length === 1 && !env.replaced[0].includes("session_id"));
+    check("Worker に session_id を問い合わせる", calls.length === 1 && calls[0] === config.licenseApiUrl + "?session_id=" + SID);
+    check("支払い確認で Pro が有効になる", !byId(env, "pro-active").classList.contains("hidden"));
+    check("ライセンスキーが表示される", byId(env, "license-key").value === license);
+    check("キーの表示欄が見える", !byId(env, "license-area").classList.contains("hidden"));
+    const saved = JSON.parse(storage.getItem(STORAGE_KEY));
+    check("キーが保存され、保留中の session は消える", saved.license === license && saved.pendingSession === null);
+
+    // 再読み込みしても Pro のまま・二重に問い合わせない
+    const env2 = launch(storage, { config, fetch: okFetch });
+    await flush();
+    check("再起動後も Pro のまま", !byId(env2, "pro-active").classList.contains("hidden"));
+    check("キーがあれば再問い合わせしない", calls.length === 1);
+
+    // 別の端末でキーを入力
+    {
+      const other = launch(makeLocalStorage(), { config });
+      setVal(other, "pro-code", "  " + license + "  ");
+      submit(other, "pro-form");
+      await flush();
+      check("別の端末でキーを入れると Pro になる", !byId(other, "pro-active").classList.contains("hidden"));
+    }
+    // 改ざんしたキー・別の鍵で署名したキーは拒否
+    {
+      const other = launch(makeLocalStorage(), { config });
+      const parts = license.split(".");
+      const forgedPayload = Buffer.from(JSON.stringify({ v: 1, sid: "x", iat: 1 })).toString("base64url");
+      setVal(other, "pro-code", parts[0] + "." + forgedPayload + "." + parts[2]);
+      submit(other, "pro-form");
+      await flush();
+      check("改ざんしたキーは拒否される", byId(other, "pro-active").classList.contains("hidden"));
+      check("改ざんしたキーにはエラーを出す", text(other, "pro-message").includes("正しくありません"));
+
+      const pair2 = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+      const fake = await issueLicense(SID, JSON.stringify(await crypto.subtle.exportKey("jwk", pair2.privateKey)));
+      setVal(other, "pro-code", fake);
+      submit(other, "pro-form");
+      await flush();
+      check("別の秘密鍵で作ったキーは拒否される", byId(other, "pro-active").classList.contains("hidden"));
+    }
+    // 未払い (402) なら Pro にせず、保留も捨てる
+    {
+      const st = makeLocalStorage();
+      const e = launch(st, { config, search: "?session_id=" + SID,
+        fetch: async () => ({ status: 402, json: async () => ({ error: "not_paid" }) }) });
+      await flush();
+      check("未払いなら Pro にならない", byId(e, "pro-active").classList.contains("hidden"));
+      check("未払いならメッセージを出す", text(e, "pro-message").includes("まだ確認できていません"));
+      check("未払い (反映待ち) の session は保留して再確認する", JSON.parse(st.getItem(STORAGE_KEY)).pendingSession === SID);
+      const e2 = launch(st, { config, fetch: okFetch });
+      await flush();
+      check("支払いが反映されたら次の起動で Pro になる", !byId(e2, "pro-active").classList.contains("hidden"));
+    }
+    // 形式の壊れた session_id (Worker が bad_session_id) は捨てる
+    {
+      const st = makeLocalStorage();
+      launch(st, { config, search: "?session_id=" + SID,
+        fetch: async () => ({ status: 400, json: async () => ({ error: "bad_session_id" }) }) });
+      await flush();
+      check("bad_session_id なら保留を捨てる", JSON.parse(st.getItem(STORAGE_KEY)).pendingSession === null);
+    }
+    // 通信エラーなら保留して、次の起動でもう一度確認する
+    {
+      const st = makeLocalStorage();
+      const e = launch(st, { config, search: "?session_id=" + SID,
+        fetch: async () => { throw new Error("offline"); } });
+      await flush();
+      check("通信エラーでは Pro にならない", byId(e, "pro-active").classList.contains("hidden"));
+      check("通信エラーでは session を保留する", JSON.parse(st.getItem(STORAGE_KEY)).pendingSession === SID);
+      const e2 = launch(st, { config, fetch: okFetch });
+      await flush();
+      check("次の起動で再確認して Pro になる", !byId(e2, "pro-active").classList.contains("hidden"));
+    }
+    // Worker が返したキーが偽物なら Pro にしない
+    {
+      const e = launch(makeLocalStorage(), { config, search: "?session_id=" + SID,
+        fetch: async () => ({ status: 200, json: async () => ({ license: license.slice(0, -4) + "AAAA" }) }) });
+      await flush();
+      check("署名が合わない応答では Pro にならない", byId(e, "pro-active").classList.contains("hidden"));
+    }
+    // Pro をやめるとキーも消える
+    {
+      byId(env2, "pro-disable-button").dispatch("click");
+      check("Proをやめるとキーも消える", JSON.parse(storage.getItem(STORAGE_KEY)).license === null);
+    }
+  }
   console.log("");
   console.log("結果: " + passed + " passed, " + failed + " failed");
   process.exit(failed > 0 ? 1 : 0);

@@ -270,6 +270,33 @@ select:focus, input:focus {
 
 .pro-features li { margin-bottom: 4px; }
 
+.buy {
+  margin: 16px 0;
+  padding: 16px;
+  border: 2px solid #5a7d4a;
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+}
+
+.price { margin: 0 0 12px; font-size: 1rem; }
+.price strong { font-size: 1.6rem; color: #4a6b3a; }
+.price-sub { display: block; font-size: 0.8rem; color: #6b6259; }
+
+.btn-buy {
+  display: block;
+  box-sizing: border-box;
+  margin-top: 0;
+  text-align: center;
+  text-decoration: none;
+}
+
+#license-key { width: 100%; font-family: monospace; font-size: 0.8rem; }
+
+/* 法令表記のページ */
+.legal dt { font-weight: bold; margin-top: 12px; }
+.legal dd { margin: 4px 0 0; }
+
 /* フッター */
 .footer {
   max-width: 640px;

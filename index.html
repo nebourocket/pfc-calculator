@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://*.workers.dev; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <title>PFCかんたん計算ツール</title>
 <meta name="description" content="食品を選んでグラム数を入れるだけ。カロリーとPFC（たんぱく質・脂質・炭水化物）をかんたんに合計できる、無料の計算ツールです。">
 <link rel="stylesheet" href="styles.css">
@@ -202,19 +204,29 @@
         <li>自分の食品を200件まで登録できる</li>
         <li>記録をCSVで書き出す</li>
       </ul>
+      <div id="buy-area" class="buy hidden">
+        <p class="price">買い切り <strong>500円</strong>（税込）<span class="price-sub">月額なし・一度の購入でずっと使えます</span></p>
+        <a id="buy-link" class="btn-primary btn-buy" href="#" rel="noopener noreferrer">500円で Pro を購入する</a>
+        <p class="note">お支払いは決済サービス Stripe の画面で行います。カード番号はこのアプリにも作者にも届きません。購入が終わるとこのページに戻り、自動で Pro が有効になります。</p>
+      </div>
+      <p id="buy-pending" class="note">Pro の購入（買い切り500円）は準備中です。</p>
       <form id="pro-form">
-        <label for="pro-code">利用コードをお持ちの方はこちら</label>
-        <input id="pro-code" type="text" inputmode="text" autocomplete="off" placeholder="利用コードを入力">
+        <label for="pro-code">ライセンスキー・利用コードをお持ちの方はこちら</label>
+        <input id="pro-code" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="PFC1.… または 利用コード">
         <button type="submit" class="btn-primary">Proを有効にする</button>
       </form>
-      <p id="pro-message" class="note"></p>
-      <p class="note">利用コードは、noteメンバーシップ「寝坊ロケットの創作室」（月額500円）の会員特典として配布しています。Pro単体のサブスクリプション（月200円予定）は準備中です。</p>
-      <p class="note">このアプリでクレジットカードなどの決済情報を入力することはありません。お支払い情報は、将来の単体サブスクリプションを含め、決済事業者（Stripe）のページでのみ扱い、このアプリに保存されることはありません。</p>
+      <p class="note">別の端末で使うときは、購入後に表示されるライセンスキーを入力してください。noteメンバーシップ「寝坊ロケットの創作室」の会員特典の利用コードも、引き続きお使いいただけます。</p>
     </div>
     <div id="pro-active" class="hidden">
       <p>Proが有効になっています。グラフ・自動計算・CSV書き出し・食品登録200件まで、すべて使えます。ありがとうございます。</p>
+      <div id="license-area" class="hidden">
+        <label for="license-key">あなたのライセンスキー（別の端末やブラウザで Pro を使うときに入力します。他の人には教えないでください）</label>
+        <input id="license-key" type="text" readonly spellcheck="false">
+        <button id="license-copy-button" class="btn-secondary" type="button">キーをコピーする</button>
+      </div>
       <button id="pro-disable-button" class="btn-secondary" type="button">Proをやめる（解錠を解除する）</button>
     </div>
+    <p id="pro-message" class="note" role="status"></p>
   </section>
 </main>
 
@@ -223,11 +235,14 @@
   <nav>
     <a href="https://note.com/nebourocket" target="_blank" rel="noopener">note（寝坊ロケット）</a>
     <a href="https://note.com/nebourocket/membership" target="_blank" rel="noopener">noteメンバーシップ「寝坊ロケットの創作室」</a>
+    <a href="legal.html">特定商取引法に基づく表記</a>
+    <a href="https://github.com/nebourocket/pfc-calculator" target="_blank" rel="noopener">ソースコード（GitHub）</a>
   </nav>
   <p class="kindle-note">Kindle『大学院進学を迷っている大学4年生へ』を執筆中です。できあがったら、こちらでもお知らせします。</p>
   <p class="credit">つくった人：寝坊ロケット（nebourocket）</p>
 </footer>
 
+<script src="config.js"></script>
 <script src="foods.js"></script>
 <script src="app.js"></script>
 </body>

@@ -1,5 +1,6 @@
 // PFCかんたん計算ツール
-// 入力データは localStorage にのみ保存する（サーバーなし）。
+// 入力データは localStorage にのみ保存する（記録は外部に送らない）。
+// 外部と通信するのは、Pro を購入した直後にライセンスキーを受け取るときだけ。
 // 日付が変わると、前日までの記録は「過去の記録」に移り、今日の記録は空になる。
 (function () {
   "use strict";
@@ -19,6 +20,18 @@
   var PRO_CODE_HASHES = [
     "1bdb86e43c7f3cb0e00e04c68d037f6506c397c6899c4926d63ba1922cf25a49"
   ];
+
+  // 買い切り Pro の設定 (config.js)。秘密の値は入っていない公開設定です。
+  var CONFIG = (window.PFC_CONFIG && typeof window.PFC_CONFIG === "object") ? window.PFC_CONFIG : {};
+  var PAYMENT_LINK_URL = /^https:\/\/(buy|checkout)\.stripe\.com\//.test(String(CONFIG.paymentLinkUrl || ""))
+    ? String(CONFIG.paymentLinkUrl) : "";
+  var LICENSE_API_URL = /^https:\/\//.test(String(CONFIG.licenseApiUrl || ""))
+    ? String(CONFIG.licenseApiUrl) : "";
+  var LICENSE_PUBLIC_JWK = (CONFIG.licensePublicJwk && typeof CONFIG.licensePublicJwk === "object")
+    ? CONFIG.licensePublicJwk : null;
+  var PURCHASE_READY = !!(PAYMENT_LINK_URL && LICENSE_API_URL && LICENSE_PUBLIC_JWK);
+  var LICENSE_RE = /^PFC1\.[A-Za-z0-9_-]{10,400}\.[A-Za-z0-9_-]{80,100}$/;
+  var SESSION_ID_RE = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 
   var DEFAULT_TARGETS = { kcal: 2000, p: 100, f: 60, c: 250 };
   var FOODS = Array.isArray(window.FOODS) ? window.FOODS : [];
@@ -163,7 +176,8 @@
   function loadState() {
     var fallback = {
       entries: [], customFoods: [], targets: sanitizeTargets(null),
-      pro: false, day: todayString(), history: {}, profile: null
+      pro: false, day: todayString(), history: {}, profile: null,
+      license: null, pendingSession: null
     };
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -177,7 +191,9 @@
         pro: parsed.pro === true,
         day: isDateString(parsed.day) ? parsed.day : todayString(),
         history: sanitizeHistory(parsed.history),
-        profile: sanitizeProfile(parsed.profile)
+        profile: sanitizeProfile(parsed.profile),
+        license: LICENSE_RE.test(String(parsed.license)) ? parsed.license : null,
+        pendingSession: SESSION_ID_RE.test(String(parsed.pendingSession)) ? parsed.pendingSession : null
       };
     } catch (e) {
       return fallback;
@@ -464,6 +480,93 @@
     });
   }
 
+  // ---------- 買い切り Pro：ライセンスキー ----------
+  // キーは "PFC1.<payload>.<署名>"。署名 (ECDSA P-256) を config.js の公開鍵で確かめる。
+  // 秘密鍵はライセンス発行 Worker の中にだけあるので、キーを偽造することはできない。
+  function base64urlToBytes(text) {
+    var b64 = text.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  // 結果は true / false の Promise。署名を確かめられない環境では false。
+  function verifyLicense(license) {
+    var text = String(license == null ? "" : license).trim();
+    if (!LICENSE_RE.test(text) || !LICENSE_PUBLIC_JWK) return Promise.resolve(false);
+    if (typeof crypto === "undefined" || !crypto.subtle || typeof TextEncoder === "undefined") {
+      return Promise.resolve(false);
+    }
+    var parts = text.split(".");
+    var payload;
+    try {
+      payload = JSON.parse(new TextDecoder().decode(base64urlToBytes(parts[1])));
+    } catch (e) {
+      return Promise.resolve(false);
+    }
+    if (!payload || payload.v !== 1) return Promise.resolve(false);
+    return crypto.subtle.importKey("jwk", LICENSE_PUBLIC_JWK,
+      { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"])
+      .then(function (key) {
+        return crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key,
+          base64urlToBytes(parts[2]), new TextEncoder().encode(parts[0] + "." + parts[1]));
+      })
+      .catch(function () { return false; });
+  }
+
+  function activateLicense(license) {
+    state.pro = true;
+    state.license = license;
+    state.pendingSession = null;
+    saveState();
+    renderAll();
+  }
+
+  // 決済後に Stripe から戻ってきたときの処理。
+  // session_id を Worker に渡して、支払い済みならライセンスキーを受け取る。
+  function claimLicense(sessionId) {
+    if (!LICENSE_API_URL || typeof fetch !== "function") return Promise.resolve();
+    els["pro-message"].textContent = "ご購入を確認しています…";
+    return fetch(LICENSE_API_URL + "?session_id=" + encodeURIComponent(sessionId),
+      { method: "GET", credentials: "omit", cache: "no-store" })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          return { status: res.status, body: body };
+        });
+      })
+      .then(function (r) {
+        var license = r.body && r.body.license;
+        if (r.status === 200 && typeof license === "string") {
+          return verifyLicense(license).then(function (ok) {
+            if (!ok) throw new Error("invalid");
+            activateLicense(license);
+            els["pro-message"].textContent = "";
+          });
+        }
+        if (r.status === 400 && r.body && r.body.error === "bad_session_id") {
+          // 形式が壊れた session_id は、何度問い合わせても通らないので捨てる。
+          state.pendingSession = null;
+          saveState();
+          els["pro-message"].textContent =
+            "お支払いを確認できませんでした。決済が完了しているのにこの表示が出る場合は、お問い合わせください。";
+          return;
+        }
+        if (r.status === 402 || r.status === 404) {
+          // 支払いの反映待ちや設定の誤りもあり得るので、session_id は捨てずに次の起動で再確認する。
+          els["pro-message"].textContent =
+            "お支払いをまだ確認できていません。決済が完了していれば、しばらくしてページを再読み込みすると有効になります。続く場合はお問い合わせください。";
+          return;
+        }
+        throw new Error("retry");
+      })
+      .catch(function () {
+        els["pro-message"].textContent =
+          "ご購入の確認に失敗しました（通信エラー）。ページを再読み込みすると、もう一度確認します。";
+      });
+  }
+
   // 自由枠の現在の登録上限（無料版 / Pro）。
   function customLimit() {
     return state.pro ? PRO_CUSTOM_LIMIT : FREE_CUSTOM_LIMIT;
@@ -499,7 +602,8 @@
    "history-list", "history-empty",
    "pro-locked", "pro-active", "chart-locked", "chart-area",
    "chart-plot", "chart-labels", "chart-empty",
-   "today-csv-button", "auto-calc-locked", "auto-calc-area", "auto-calc-result"
+   "today-csv-button", "auto-calc-locked", "auto-calc-area", "auto-calc-result",
+   "buy-area", "buy-link", "buy-pending", "license-area", "license-key"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -714,6 +818,11 @@
     if (els["auto-calc-area"]) {
       els["auto-calc-area"].classList.toggle("hidden", !state.pro);
     }
+    if (els["buy-area"]) els["buy-area"].classList.toggle("hidden", !PURCHASE_READY);
+    if (els["buy-pending"]) els["buy-pending"].classList.toggle("hidden", PURCHASE_READY);
+    if (els["buy-link"] && PURCHASE_READY) els["buy-link"].href = PAYMENT_LINK_URL;
+    if (els["license-area"]) els["license-area"].classList.toggle("hidden", !state.license);
+    if (els["license-key"]) els["license-key"].value = state.license || "";
   }
 
   // 自動計算フォームに、保存済みプロフィールを反映する。
@@ -809,6 +918,19 @@
   document.getElementById("pro-form").addEventListener("submit", function (e) {
     e.preventDefault();
     var code = document.getElementById("pro-code").value;
+    // "PFC1." で始まるものは、購入で受け取ったライセンスキーとして確かめる。
+    if (/^PFC1\./.test(String(code).trim())) {
+      var license = String(code).trim();
+      verifyLicense(license).then(function (ok) {
+        if (ok) {
+          els["pro-message"].textContent = "";
+          activateLicense(license);
+        } else {
+          els["pro-message"].textContent = "ライセンスキーが正しくありません。コピーしたキー全体を貼り付けてください。";
+        }
+      });
+      return;
+    }
     checkProCode(code).then(function (result) {
       if (result === "empty") return;
       if (result === "ok") {
@@ -822,8 +944,12 @@
   });
 
   document.getElementById("pro-disable-button").addEventListener("click", function () {
-    if (!window.confirm("Proをやめて、無料版に戻しますか？（記録データは消えません）")) return;
+    var msg = state.license
+      ? "Proをやめて、無料版に戻しますか？（記録データは消えません）\nライセンスキーも消えるので、再び使うときのためにキーを控えておいてください。"
+      : "Proをやめて、無料版に戻しますか？（記録データは消えません）";
+    if (!window.confirm(msg)) return;
     state.pro = false;
+    state.license = null;
     saveState();
     renderAll();
   });
@@ -865,5 +991,49 @@
     downloadCsv("pfc-history.csv", buildHistoryCsv());
   });
 
+  var copyButton = document.getElementById("license-copy-button");
+  if (copyButton) {
+    copyButton.addEventListener("click", function () {
+      if (!state.license) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(state.license).then(function () {
+          copyButton.textContent = "コピーしました";
+        }, function () {
+          els["license-key"].select();
+        });
+      } else {
+        els["license-key"].select();
+      }
+    });
+  }
+
   renderAll();
+
+  // Stripe から ?session_id=cs_... 付きで戻ってきたら、URL から消してから確認する
+  // (ブラウザ履歴やリンク先への Referer に残さないため)。
+  (function handleReturnFromCheckout() {
+    var sessionId = null;
+    try {
+      var params = new URLSearchParams(window.location.search);
+      sessionId = params.get("session_id");
+      if (sessionId !== null && window.history && window.history.replaceState) {
+        params.delete("session_id");
+        var rest = params.toString();
+        window.history.replaceState(null, "",
+          window.location.pathname + (rest ? "?" + rest : "") + window.location.hash);
+      }
+    } catch (e) {
+      sessionId = null;
+    }
+    if (sessionId && SESSION_ID_RE.test(sessionId)) {
+      if (state.license) {
+        els["pro-message"].textContent =
+          "この端末ではすでに購入済みのライセンスキーで Pro が有効です。";
+      } else {
+        state.pendingSession = sessionId;
+        saveState();
+      }
+    }
+    if (state.pendingSession && !state.license) claimLicense(state.pendingSession);
+  })();
 })();
