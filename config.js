@@ -7,10 +7,5 @@ window.PFC_CONFIG = {
   // ライセンス発行 Worker の URL (https://pfc-license.<あなたのサブドメイン>.workers.dev/license)
   licenseApiUrl: "https://pfc-license.nebourocket.workers.dev/license",
   // ライセンス署名の公開鍵 (worker/scripts/gen-keys.mjs が出力する public の JSON)
-  licensePublicJwk: {
-    kty: "EC",
-    x: "-7yzHcfLjpk_QL-4pwqCy6tmUvI2WMVWnhMI_VHK4sQ",
-    y: "YH-mAqYS5KYhhQtuY2d3tv7b4wYajpquEAq228SEJ14",
-    crv: "P-256",
-  },
+  licensePublicJwk: {"kty":"EC","crv":"P-256","x":"lRa8bccqNGsiw8nilMgluEK5zI3b70Iopmu4j3qviEw","y":"yu6p8985AJRAY_FrnsqcN-cFXSeGhYROIin74UID3Ys"},
 };
