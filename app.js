@@ -13,6 +13,13 @@
   var HISTORY_DAYS_TO_SHOW = 7;      // 過去の記録の表示日数
   var HISTORY_MAX_DAYS = 90;         // 過去の記録の保存日数
   var CHART_DAYS = 14;               // グラフに表示する日数
+  var BODY_MAX_DAYS = 365;           // 体重・筋トレ・スコアの保存日数
+  var KCAL_PER_KG = 7700;            // 体脂肪 1kg あたりのエネルギー（一般的な目安）
+  var TDEE_WINDOW_DAYS = 14;         // 実績から TDEE を逆算するときに見る日数
+  var MIN_INTAKE_DAYS = 7;           // 逆算に必要な、食事を記録した日数
+  var MIN_WEIGH_INS = 4;             // 逆算に必要な、体重を記録した回数
+  var MAX_WORKOUT_ITEMS = 50;        // 1日に記録できる筋トレの件数
+  var STREAK_MIN_SCORE = 50;         // 連続記録に数える1日のスコアの下限
 
   // Pro の利用コードは、平文をソースに置かず SHA-256 ハッシュで照合する。
   // ここに登録するのは配布コードのハッシュだけ。平文コードは台帳側
@@ -53,6 +60,26 @@
 
   function isDateString(s) {
     return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  }
+
+  // 日付の文字列（YYYY-MM-DD）を UTC の日付として扱い、時差やサマータイムの影響を受けないようにする。
+  function dateToUtc(dateStr) {
+    var parts = dateStr.split("-");
+    return Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+
+  function addDays(dateStr, n) {
+    var d = new Date(dateToUtc(dateStr) + n * 86400000);
+    return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate());
+  }
+
+  function daysBetween(fromStr, toStr) {
+    return Math.round((dateToUtc(toStr) - dateToUtc(fromStr)) / 86400000);
+  }
+
+  function shortDate(dateStr) {
+    var parts = dateStr.split("-");
+    return Number(parts[1]) + "/" + Number(parts[2]);
   }
 
   function formatDateLabel(dateStr) {
@@ -173,28 +200,102 @@
     };
   }
 
+  // 体重の記録：{ "YYYY-MM-DD": kg }
+  function sanitizeWeights(w) {
+    var out = {};
+    if (!w || typeof w !== "object") return out;
+    Object.keys(w).forEach(function (date) {
+      var kg = finiteNumber(w[date]);
+      if (isDateString(date) && kg !== null && kg >= 20 && kg <= 300) out[date] = kg;
+    });
+    return out;
+  }
+
+  // 筋トレの記録：{ "YYYY-MM-DD": [{ id, name, kg, reps, sets }] }
+  function sanitizeWorkoutItem(x) {
+    if (!x || typeof x !== "object") return null;
+    var name = typeof x.name === "string" ? x.name.trim().slice(0, 40) : "";
+    var kg = finiteNumber(x.kg);
+    var reps = finiteNumber(x.reps);
+    var sets = finiteNumber(x.sets);
+    if (!name) return null;
+    if (kg === null || kg < 0 || kg > 1000) return null;
+    if (reps === null || reps < 1 || reps > 1000 || Math.floor(reps) !== reps) return null;
+    if (sets === null || sets < 1 || sets > 100 || Math.floor(sets) !== sets) return null;
+    return {
+      id: typeof x.id === "string" ? x.id.slice(0, 64) : nextId("w"),
+      name: name, kg: kg, reps: reps, sets: sets
+    };
+  }
+
+  function sanitizeWorkouts(w) {
+    var out = {};
+    if (!w || typeof w !== "object") return out;
+    Object.keys(w).forEach(function (date) {
+      if (!isDateString(date) || !Array.isArray(w[date])) return;
+      var seen = {};
+      var items = w[date].map(sanitizeWorkoutItem).filter(Boolean).slice(0, MAX_WORKOUT_ITEMS);
+      // id が重なっていると、削除で複数件が消えてしまうので付け直す。
+      items.forEach(function (item) {
+        if (seen[item.id]) item.id = nextId("w");
+        seen[item.id] = true;
+      });
+      if (items.length) out[date] = items;
+    });
+    return out;
+  }
+
+  // 減量・増量の計画：{ goalWeight, goalDate }
+  function sanitizePlan(p) {
+    if (!p || typeof p !== "object") return null;
+    var goal = finiteNumber(p.goalWeight);
+    if (goal === null || goal < 20 || goal > 300 || !isDateString(p.goalDate)) return null;
+    return { goalWeight: goal, goalDate: p.goalDate };
+  }
+
+  // 1日のスコア：{ "YYYY-MM-DD": 0〜100 }
+  function sanitizeScores(sc) {
+    var out = {};
+    if (!sc || typeof sc !== "object") return out;
+    Object.keys(sc).forEach(function (date) {
+      var v = finiteNumber(sc[date]);
+      if (isDateString(date) && v !== null && v >= 0 && v <= 100) out[date] = v;
+    });
+    return out;
+  }
+
+  // 保存データ（またはバックアップ）を、使える形に検証して返す。
+  function sanitizeState(parsed) {
+    return {
+      entries: sanitizeEntries(parsed.entries),
+      customFoods: sanitizeCustomFoods(parsed.customFoods),
+      targets: sanitizeTargets(parsed.targets),
+      pro: parsed.pro === true,
+      day: isDateString(parsed.day) ? parsed.day : todayString(),
+      history: sanitizeHistory(parsed.history),
+      profile: sanitizeProfile(parsed.profile),
+      license: LICENSE_RE.test(String(parsed.license)) ? parsed.license : null,
+      pendingSession: SESSION_ID_RE.test(String(parsed.pendingSession)) ? parsed.pendingSession : null,
+      weights: sanitizeWeights(parsed.weights),
+      workouts: sanitizeWorkouts(parsed.workouts),
+      plan: sanitizePlan(parsed.plan),
+      scores: sanitizeScores(parsed.scores)
+    };
+  }
+
   function loadState() {
     var fallback = {
       entries: [], customFoods: [], targets: sanitizeTargets(null),
       pro: false, day: todayString(), history: {}, profile: null,
-      license: null, pendingSession: null
+      license: null, pendingSession: null,
+      weights: {}, workouts: {}, plan: null, scores: {}
     };
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return fallback;
       var parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return fallback;
-      return {
-        entries: sanitizeEntries(parsed.entries),
-        customFoods: sanitizeCustomFoods(parsed.customFoods),
-        targets: sanitizeTargets(parsed.targets),
-        pro: parsed.pro === true,
-        day: isDateString(parsed.day) ? parsed.day : todayString(),
-        history: sanitizeHistory(parsed.history),
-        profile: sanitizeProfile(parsed.profile),
-        license: LICENSE_RE.test(String(parsed.license)) ? parsed.license : null,
-        pendingSession: SESSION_ID_RE.test(String(parsed.pendingSession)) ? parsed.pendingSession : null
-      };
+      return sanitizeState(parsed);
     } catch (e) {
       return fallback;
     }
@@ -213,6 +314,13 @@
     while (dates.length > HISTORY_MAX_DAYS) {
       delete state.history[dates.shift()];
     }
+    // 体重・筋トレ・スコアは、1年より古いものを消す。
+    var oldest = addDays(todayString(), -BODY_MAX_DAYS);
+    ["weights", "workouts", "scores"].forEach(function (key) {
+      Object.keys(state[key]).forEach(function (date) {
+        if (date < oldest) delete state[key][date];
+      });
+    });
   }
 
   // ---------- 食品の検索 ----------
@@ -291,6 +399,203 @@
     };
   }
 
+  // ---------- Pro：体重の推移と、実績からの必要カロリー ----------
+  function bmrFor(profile, weight) {
+    return profile.sex === "female"
+      ? 10 * weight + 6.25 * profile.height - 5 * profile.age - 161
+      : 10 * weight + 6.25 * profile.height - 5 * profile.age + 5;
+  }
+
+  // 最小二乗法の傾き（y の x あたりの変化）。点が2つ未満なら null。
+  function regressionSlope(points) {
+    if (points.length < 2) return null;
+    var n = points.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    points.forEach(function (pt) { sx += pt.x; sy += pt.y; sxx += pt.x * pt.x; sxy += pt.x * pt.y; });
+    var den = n * sxx - sx * sx;
+    return den === 0 ? null : (n * sxy - sx * sy) / den;
+  }
+
+  // 体重の推移。avg7＝直近7日（今日を含む）の平均、weeklyChange＝直近14日の傾き（kg/週）。
+  function weightTrend(today) {
+    var last7 = [], points = [], latest = null;
+    Object.keys(state.weights).sort().forEach(function (date) {
+      var age = daysBetween(date, today);
+      if (age < 0) return;
+      latest = { date: date, kg: state.weights[date] };
+      if (age < 7) last7.push(state.weights[date]);
+      if (age < TDEE_WINDOW_DAYS) points.push({ x: -age, y: state.weights[date], date: date });
+    });
+    var avg7 = last7.length
+      ? last7.reduce(function (a, b) { return a + b; }, 0) / last7.length : null;
+    var span = points.length ? daysBetween(points[0].date, points[points.length - 1].date) : 0;
+    var slope = regressionSlope(points);
+    return {
+      latest: latest, avg7: avg7, weighIns: points.length, span: span,
+      slopePerDay: slope, weeklyChange: slope === null ? null : slope * 7
+    };
+  }
+
+  // 目標体重と期限から、今日の目標カロリーと PFC を決める。
+  // TDEE は「直近14日の平均摂取量 − 体重の変化×7700kcal」で逆算する。
+  // データが足りない間は、Mifflin-St Jeor 式 × 活動レベルで代わりに出す。
+  // 減量の速さは体重の1%/週、増量は0.5%/週を上限にし、目標カロリーは基礎代謝を下回らない。
+  function computeBodyPlan(today) {
+    var profile = state.profile;
+    if (!profile) return { ready: false, reason: "profile" };
+    var trend = weightTrend(today);
+    var weight = trend.avg7 !== null ? trend.avg7 : (trend.latest ? trend.latest.kg : profile.weight);
+    var bmr = bmrFor(profile, weight);
+
+    // 基礎代謝の半分に満たない日は、記録の付け忘れとみなして除く（消費を低く見積もらないため）。
+    var intake = [];
+    for (var i = 1; i <= TDEE_WINDOW_DAYS; i++) {
+      var h = state.history[addDays(today, -i)];
+      if (h && h.kcal >= bmr * 0.5) intake.push(h.kcal);
+    }
+    var avgIntake = intake.length
+      ? intake.reduce(function (a, b) { return a + b; }, 0) / intake.length : null;
+
+    var tdee, source;
+    if (intake.length >= MIN_INTAKE_DAYS && trend.weighIns >= MIN_WEIGH_INS &&
+        trend.span >= 7 && trend.slopePerDay !== null) {
+      tdee = avgIntake - trend.slopePerDay * KCAL_PER_KG;
+      // 記録の抜けなどで極端な値になったときは、ありうる範囲に収める。
+      tdee = Math.min(Math.max(tdee, bmr * 1.1), bmr * 2.5);
+      source = "actual";
+    } else {
+      tdee = bmr * profile.activity;
+      source = "estimate";
+    }
+
+    var result = {
+      ready: true, weight: weight, bmr: bmr, tdee: tdee, source: source,
+      intakeDays: intake.length, avgIntake: avgIntake, trend: trend,
+      plannedWeekly: 0, daysLeft: null, limited: false, floored: false
+    };
+    var rate = 0;
+    if (state.plan) {
+      var daysLeft = daysBetween(today, state.plan.goalDate);
+      result.daysLeft = daysLeft;
+      var diff = state.plan.goalWeight - weight;
+      if (daysLeft > 0 && Math.abs(diff) >= 0.2) {
+        rate = diff / daysLeft;
+        var maxLoss = -weight * 0.01 / 7, maxGain = weight * 0.005 / 7;
+        if (rate < maxLoss) { rate = maxLoss; result.limited = true; }
+        if (rate > maxGain) { rate = maxGain; result.limited = true; }
+      }
+    }
+    result.plannedWeekly = rate * 7;
+    var kcal = tdee + rate * KCAL_PER_KG;
+    if (kcal < bmr) { kcal = bmr; result.floored = true; }
+    result.kcal = Math.round(kcal);
+    result.p = Math.round(weight * 2);
+    result.f = Math.round(result.kcal * 0.25 / 9);
+    result.c = Math.max(0, Math.round((result.kcal - result.p * 4 - result.f * 9) / 4));
+    return result;
+  }
+
+  // 計画があれば、今日の目標を計画から自動で決める。
+  function applyPlanTargets() {
+    if (!state.pro || !state.plan) return;
+    var r = computeBodyPlan(todayString());
+    if (!r.ready) return;
+    state.targets = { kcal: r.kcal, p: r.p, f: r.f, c: r.c };
+  }
+
+  // ---------- Pro：筋トレ ----------
+  function exerciseKey(name) { return String(name).trim().toLowerCase(); }
+
+  // 推定1RM（Epley 式）。1回なら重量そのもの。
+  function estimated1RM(item) {
+    return item.reps === 1 ? item.kg : item.kg * (1 + item.reps / 30);
+  }
+
+  // date より前（同じ日なら index より前）の、その種目の推定1RMの最高値。記録が無ければ null。
+  function previousBest(name, date, index) {
+    var key = exerciseKey(name), best = null;
+    Object.keys(state.workouts).forEach(function (d) {
+      if (d > date) return;
+      state.workouts[d].forEach(function (item, i) {
+        if (d === date && i >= index) return;
+        if (exerciseKey(item.name) !== key) return;
+        var v = estimated1RM(item);
+        if (best === null || v > best) best = v;
+      });
+    });
+    return best;
+  }
+
+  // date より前で、最後にその種目をやった日と、その日のいちばん重いセット。
+  function previousSession(name, date) {
+    var key = exerciseKey(name);
+    var dates = Object.keys(state.workouts).filter(function (d) { return d < date; }).sort().reverse();
+    for (var i = 0; i < dates.length; i++) {
+      var items = state.workouts[dates[i]].filter(function (x) { return exerciseKey(x.name) === key; });
+      if (items.length) {
+        items.sort(function (a, b) { return b.kg - a.kg || b.reps - a.reps; });
+        return { date: dates[i], item: items[0] };
+      }
+    }
+    return null;
+  }
+
+  function exerciseNames() {
+    var seen = {}, names = [];
+    Object.keys(state.workouts).sort().reverse().forEach(function (d) {
+      state.workouts[d].forEach(function (item) {
+        var key = exerciseKey(item.name);
+        if (!seen[key]) { seen[key] = true; names.push(item.name); }
+      });
+    });
+    return names;
+  }
+
+  // ---------- Pro：スコアと連続記録 ----------
+  // 1日100点満点。食事の記録20・カロリーが目標の±10%以内30・たんぱく質が目標の90%以上20・
+  // 体重の記録15・筋トレの記録15。
+  function dayScore(t, targets, hasWeight, hasWorkout) {
+    var items = [
+      { label: "食事を記録した", pts: 20, got: t.kcal > 0 },
+      { label: "カロリーが目標の±10%以内", pts: 30,
+        got: t.kcal > 0 && targets.kcal > 0 && Math.abs(t.kcal - targets.kcal) <= targets.kcal * 0.1 },
+      { label: "たんぱく質が目標の90%以上", pts: 20,
+        got: targets.p > 0 && t.p >= targets.p * 0.9 },
+      { label: "体重を記録した", pts: 15, got: hasWeight },
+      { label: "筋トレを記録した", pts: 15, got: hasWorkout }
+    ];
+    var total = 0;
+    items.forEach(function (x) { if (x.got) total += x.pts; });
+    return { total: total, items: items };
+  }
+
+  function todayScore() {
+    var today = todayString();
+    return dayScore(totals(), state.targets, state.weights[today] !== undefined,
+      !!(state.workouts[today] && state.workouts[today].length));
+  }
+
+  // 連続記録：スコアが50点以上の日が何日続いているか。今日がまだ50点未満なら、昨日までで数える。
+  function streakInfo(today, todayTotal) {
+    var scores = {};
+    Object.keys(state.scores).forEach(function (d) { scores[d] = state.scores[d]; });
+    scores[today] = todayTotal;
+    var current = 0;
+    var d = todayTotal >= STREAK_MIN_SCORE ? today : addDays(today, -1);
+    while ((scores[d] || 0) >= STREAK_MIN_SCORE) { current += 1; d = addDays(d, -1); }
+    var best = 0, run = 0, prev = null, sum = 0;
+    Object.keys(scores).sort().forEach(function (date) {
+      sum += scores[date];
+      if (scores[date] >= STREAK_MIN_SCORE) {
+        run = (prev !== null && daysBetween(prev, date) === 1) ? run + 1 : 1;
+        prev = date;
+        if (run > best) best = run;
+      } else {
+        run = 0; prev = null;
+      }
+    });
+    return { current: current, best: best, total: sum };
+  }
+
   // ---------- Pro：グラフ用データ ----------
   // 直近 days 日（今日を含む）の日別合計を、古い順に並べて返す。
   // 記録のない日は 0 として含める。
@@ -336,22 +641,34 @@
   }
 
   function buildHistoryCsv() {
-    var lines = ["日付,カロリー(kcal),たんぱく質(g),脂質(g),炭水化物(g)"];
-    var dates = Object.keys(state.history).sort();
-    dates.forEach(function (date) {
+    var lines = ["日付,カロリー(kcal),たんぱく質(g),脂質(g),炭水化物(g),体重(kg)"];
+    function weightCell(date) { return state.weights[date] !== undefined ? state.weights[date] : ""; }
+    var today = todayString();
+    // 食事の記録が無く、体重だけ記録した日も行にする。
+    var seen = {};
+    Object.keys(state.history).concat(Object.keys(state.weights)).forEach(function (d) {
+      if (d !== today) seen[d] = true;
+    });
+    Object.keys(seen).sort().forEach(function (date) {
       var v = state.history[date];
-      lines.push([date, Math.round(v.kcal), round1(v.p), round1(v.f), round1(v.c)].join(","));
+      lines.push(v
+        ? [date, Math.round(v.kcal), round1(v.p), round1(v.f), round1(v.c), weightCell(date)].join(",")
+        : [date, "", "", "", "", weightCell(date)].join(","));
     });
     var t = totals();
-    lines.push([todayString(), Math.round(t.kcal), round1(t.p), round1(t.f), round1(t.c)].join(","));
+    lines.push([today, Math.round(t.kcal), round1(t.p), round1(t.f), round1(t.c), weightCell(today)].join(","));
     return lines.join("\r\n");
   }
 
   // CSV をダウンロードさせる。文字化け対策に BOM 付き UTF-8 で出す。
   // このアプリは決済情報などを扱わないため、ここで扱うのは記録データのみ。
   function downloadCsv(filename, csvText) {
+    downloadFile(filename, "\uFEFF" + csvText, "text/csv;charset=utf-8");
+  }
+
+  function downloadFile(filename, text, type) {
     try {
-      var blob = new Blob(["\uFEFF" + csvText], { type: "text/csv;charset=utf-8" });
+      var blob = new Blob([text], { type: type });
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
       a.href = url;
@@ -579,17 +896,25 @@
   state.entries = state.entries.filter(function (e) { return !!findFood(e.foodId); });
 
   // 日付が変わっていたら、前日分を過去の記録へ移して今日を空にする。
-  (function rollOverIfNeeded() {
+  // 前日のスコアも、その日の記録と目標で確定して残す。
+  function rollOverIfNeeded() {
     var today = todayString();
     if (state.day === today) { saveState(); return; }
+    var t = totals();
     if (state.entries.length > 0) {
-      state.history[state.day] = totals();
+      state.history[state.day] = t;
     }
+    var past = dayScore(t, state.targets, state.weights[state.day] !== undefined,
+      !!(state.workouts[state.day] && state.workouts[state.day].length));
+    if (past.total > 0) state.scores[state.day] = past.total;
     state.entries = [];
     state.day = today;
     trimHistory();
     saveState();
-  })();
+  }
+  rollOverIfNeeded();
+  applyPlanTargets();
+  saveState();
 
   // ---------- 描画 ----------
   var els = {};
@@ -603,7 +928,12 @@
    "pro-locked", "pro-active", "chart-locked", "chart-area",
    "chart-plot", "chart-labels", "chart-empty",
    "today-csv-button", "auto-calc-locked", "auto-calc-area", "auto-calc-result",
-   "buy-area", "buy-link", "buy-pending", "license-area", "license-key"
+   "buy-area", "buy-link", "buy-pending", "license-area", "license-key",
+   "body-locked", "body-area", "weight-input", "weight-trend", "weight-list",
+   "workout-list", "workout-empty", "exercise-names", "workout-message",
+   "plan-goal", "plan-date", "plan-result", "plan-clear-button", "plan-message",
+   "score-locked", "score-area", "score-total", "score-items", "score-streak",
+   "score-best", "score-sum", "backup-message"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -617,6 +947,8 @@
     renderBar("p", t.p, targets.p);
     renderBar("f", t.f, targets.f);
     renderBar("c", t.c, targets.c);
+    // スコアは合計と目標で決まるので、合計を描き直すたびに一緒に描き直す。
+    renderScore();
   }
 
   function renderBar(key, value, target) {
@@ -732,10 +1064,15 @@
   }
 
   function renderTargets() {
-    document.getElementById("target-kcal").value = state.targets.kcal;
-    document.getElementById("target-p").value = state.targets.p;
-    document.getElementById("target-f").value = state.targets.f;
-    document.getElementById("target-c").value = state.targets.c;
+    // 計画があるあいだは目標が自動で決まるので、手では変えられないようにする。
+    var byPlan = !!(state.plan && state.pro);
+    ["kcal", "p", "f", "c"].forEach(function (key) {
+      var input = document.getElementById("target-" + key);
+      input.value = state.targets[key];
+      input.disabled = byPlan;
+    });
+    var note = document.getElementById("target-plan-note");
+    if (note) note.classList.toggle("hidden", !byPlan);
   }
 
   function renderHistory() {
@@ -806,6 +1143,155 @@
     }
   }
 
+  function listItem(title, detail, onDelete) {
+    var li = document.createElement("li");
+    var info = document.createElement("div");
+    var name = document.createElement("div");
+    name.className = "entry-name";
+    name.textContent = title;
+    var sub = document.createElement("div");
+    sub.className = "entry-detail";
+    sub.textContent = detail;
+    info.appendChild(name);
+    info.appendChild(sub);
+    li.appendChild(info);
+    if (onDelete) {
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "entry-delete";
+      del.textContent = "削除";
+      del.addEventListener("click", onDelete);
+      li.appendChild(del);
+    }
+    return li;
+  }
+
+  // 入力中の欄は書き換えない。値が無ければ空にする。
+  function setFieldUnlessFocused(el, value) {
+    if (typeof document !== "undefined" && document.activeElement === el) return;
+    el.value = value === undefined || value === null ? "" : value;
+  }
+
+  function signed(n, decimals) { return (n > 0 ? "+" : n < 0 ? "−" : "±") + fmt(Math.abs(n), decimals); }
+
+  function renderBody() {
+    if (!els["body-locked"]) return;
+    els["body-locked"].classList.toggle("hidden", state.pro);
+    els["body-area"].classList.toggle("hidden", !state.pro);
+    if (!state.pro) return;
+    var today = todayString();
+
+    // 体重
+    var trend = weightTrend(today);
+    setFieldUnlessFocused(els["weight-input"], state.weights[today]);
+    var lines = [];
+    if (trend.avg7 !== null) lines.push("直近7日の平均 " + fmt(trend.avg7, 1) + "kg");
+    if (trend.weeklyChange !== null && trend.span >= 7) {
+      lines.push("週あたり " + signed(trend.weeklyChange, 2) + "kg（直近14日の傾き）");
+    }
+    els["weight-trend"].textContent = lines.length ? lines.join(" ・ ") : "体重を記録すると、平均と増減の傾きが出ます。";
+    var wl = els["weight-list"];
+    wl.innerHTML = "";
+    Object.keys(state.weights).sort().reverse().slice(0, 7).forEach(function (date) {
+      wl.appendChild(listItem(formatDateLabel(date), fmt(state.weights[date], 1) + "kg", function () {
+        delete state.weights[date];
+        saveState();
+        applyPlanTargets();
+        saveState();
+        renderAll();
+      }));
+    });
+
+    // 筋トレ
+    var dl = els["exercise-names"];
+    dl.innerHTML = "";
+    exerciseNames().forEach(function (n) {
+      var opt = document.createElement("option");
+      opt.value = n;
+      dl.appendChild(opt);
+    });
+    var items = state.workouts[today] || [];
+    var list = els["workout-list"];
+    list.innerHTML = "";
+    els["workout-empty"].classList.toggle("hidden", items.length > 0);
+    items.forEach(function (item, i) {
+      var detail = fmt(item.kg, 1) + "kg × " + item.reps + "回 × " + item.sets + "セット ・ 推定1RM " +
+        fmt(estimated1RM(item), 1) + "kg";
+      var prev = previousSession(item.name, today);
+      if (prev) {
+        detail += " ・ 前回（" + shortDate(prev.date) + "）" + fmt(prev.item.kg, 1) + "kg × " +
+          prev.item.reps + "回 × " + prev.item.sets + "セット";
+      }
+      var best = previousBest(item.name, today, i);
+      var title = item.name + (best !== null && estimated1RM(item) > best ? "　★ 自己ベスト更新" : "");
+      list.appendChild(listItem(title, detail, function () {
+        state.workouts[today] = (state.workouts[today] || []).filter(function (x) { return x.id !== item.id; });
+        if (!state.workouts[today].length) delete state.workouts[today];
+        saveState();
+        renderAll();
+      }));
+    });
+
+    // 計画
+    setFieldUnlessFocused(els["plan-goal"], state.plan ? state.plan.goalWeight : undefined);
+    setFieldUnlessFocused(els["plan-date"], state.plan ? state.plan.goalDate : undefined);
+    els["plan-clear-button"].classList.toggle("hidden", !state.plan);
+    var r = computeBodyPlan(today);
+    var out = els["plan-result"];
+    out.innerHTML = "";
+    if (!r.ready) {
+      out.textContent = "先に「1日の目標を設定する」の「目標の自動計算」で、性別・年齢・身長・活動レベルを入れてください。";
+      return;
+    }
+    var rows = [
+      "体重 " + fmt(r.weight, 1) + "kg ・ 基礎代謝 約" + fmt(r.bmr, 0) + "kcal",
+      r.source === "actual"
+        ? "1日の消費（実績から逆算） 約" + fmt(r.tdee, 0) + "kcal ・ 直近" + r.intakeDays + "日の平均摂取 " +
+          fmt(r.avgIntake, 0) + "kcal"
+        : "1日の消費（式による推定） 約" + fmt(r.tdee, 0) + "kcal ・ 食事" + MIN_INTAKE_DAYS + "日分と体重" +
+          MIN_WEIGH_INS + "回分（1週間以上）がたまると、実績から計算します（今は食事" + r.intakeDays +
+          "日・体重" + r.trend.weighIns + "回）"
+    ];
+    if (state.plan) {
+      rows.push(r.daysLeft > 0
+        ? "目標 " + fmt(state.plan.goalWeight, 1) + "kg まで あと" + r.daysLeft + "日 ・ 計画 週" +
+          signed(r.plannedWeekly, 2) + "kg" + (r.limited ? "（体に無理のない速さに抑えています）" : "")
+        : "期限を過ぎたので、今の体重を保つカロリーにしています。");
+      rows.push("今日の目標 " + fmt(r.kcal, 0) + "kcal ・ P " + fmt(r.p, 0) + "g ・ F " + fmt(r.f, 0) +
+        "g ・ C " + fmt(r.c, 0) + "g" + (r.floored ? "（基礎代謝を下回らないようにしています）" : ""));
+      rows.push("目標は計画から毎日自動で決まります。手で決めたいときは「計画をやめる」を押してください。");
+    } else {
+      rows.push("目標体重と期限を入れると、毎日の目標カロリーとPFCを自動で決めます。");
+    }
+    rows.forEach(function (text) {
+      var p = document.createElement("p");
+      p.className = "plan-row";
+      p.textContent = text;
+      out.appendChild(p);
+    });
+  }
+
+  function renderScore() {
+    if (!els["score-locked"]) return;
+    els["score-locked"].classList.toggle("hidden", state.pro);
+    els["score-area"].classList.toggle("hidden", !state.pro);
+    if (!state.pro) return;
+    var sc = todayScore();
+    var st = streakInfo(todayString(), sc.total);
+    els["score-total"].textContent = sc.total;
+    els["score-streak"].textContent = st.current;
+    els["score-best"].textContent = st.best;
+    els["score-sum"].textContent = fmt(st.total, 0);
+    var ul = els["score-items"];
+    ul.innerHTML = "";
+    sc.items.forEach(function (x) {
+      var li = document.createElement("li");
+      li.className = x.got ? "got" : "";
+      li.textContent = (x.got ? "✓ " : "・ ") + x.label + "（" + x.pts + "点）";
+      ul.appendChild(li);
+    });
+  }
+
   function renderPro() {
     if (els["pro-locked"]) els["pro-locked"].classList.toggle("hidden", state.pro);
     if (els["pro-active"]) els["pro-active"].classList.toggle("hidden", !state.pro);
@@ -847,6 +1333,7 @@
     renderChart();
     renderPro();
     renderProfile();
+    renderBody();
   }
 
   // ---------- イベント ----------
@@ -972,6 +1459,14 @@
     state.profile = profile;
     state.targets = { kcal: r.kcal, p: r.p, f: r.f, c: r.c };
     saveState();
+    if (state.plan && state.pro) {
+      applyPlanTargets();
+      saveState();
+      renderAll();
+      els["auto-calc-result"].textContent =
+        "プロフィールを保存しました。計画があるので、今日の目標は「からだの記録」の計画から決めています。";
+      return;
+    }
     renderSummary();
     renderTargets();
     renderChart();
@@ -989,6 +1484,120 @@
   document.getElementById("history-csv-button").addEventListener("click", function () {
     if (!state.pro) return;
     downloadCsv("pfc-history.csv", buildHistoryCsv());
+  });
+
+  // ---------- からだの記録（Pro） ----------
+  document.getElementById("weight-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!state.pro) return;
+    var kg = parseFloat(els["weight-input"].value);
+    if (!isFinite(kg) || kg < 20 || kg > 300) return;
+    state.weights[todayString()] = Math.round(kg * 10) / 10;
+    applyPlanTargets();
+    saveState();
+    renderAll();
+  });
+
+  document.getElementById("workout-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!state.pro) return;
+    var today = todayString();
+    var item = sanitizeWorkoutItem({
+      id: nextId("w"),
+      name: document.getElementById("workout-name").value,
+      kg: parseFloat(document.getElementById("workout-kg").value),
+      reps: parseFloat(document.getElementById("workout-reps").value),
+      sets: parseFloat(document.getElementById("workout-sets").value)
+    });
+    if (!item) {
+      els["workout-message"].textContent = "種目名・重量（0〜1000kg）・回数・セット数（整数）を確かめてください。";
+      return;
+    }
+    var items = state.workouts[today] || [];
+    if (items.length >= MAX_WORKOUT_ITEMS) {
+      els["workout-message"].textContent = "1日に記録できるのは" + MAX_WORKOUT_ITEMS + "件までです。";
+      return;
+    }
+    var best = previousBest(item.name, today, items.length);
+    items.push(item);
+    state.workouts[today] = items;
+    els["workout-message"].textContent = best !== null && estimated1RM(item) > best
+      ? "★ " + item.name + "の自己ベスト（推定1RM " + fmt(estimated1RM(item), 1) + "kg）を更新しました！" : "";
+    saveState();
+    renderAll();
+  });
+
+  document.getElementById("plan-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!state.pro) return;
+    var plan = sanitizePlan({
+      goalWeight: parseFloat(els["plan-goal"].value),
+      goalDate: els["plan-date"].value
+    });
+    if (!plan || plan.goalDate <= todayString()) {
+      els["plan-message"].textContent = "目標体重（20〜300kg）と、明日以降の期限を入れてください。";
+      return;
+    }
+    els["plan-message"].textContent = "";
+    state.plan = plan;
+    applyPlanTargets();
+    saveState();
+    renderAll();
+  });
+
+  els["plan-clear-button"].addEventListener("click", function () {
+    if (!window.confirm("計画をやめますか？（今の目標値はそのまま残り、手で変えられるようになります）")) return;
+    state.plan = null;
+    saveState();
+    renderAll();
+  });
+
+  // ---------- バックアップ（無料） ----------
+  document.getElementById("backup-export-button").addEventListener("click", function () {
+    var data = {};
+    Object.keys(state).forEach(function (k) { if (k !== "pendingSession") data[k] = state[k]; });
+    downloadFile("pfc-backup-" + todayString() + ".json",
+      JSON.stringify({ app: "pfc-calculator", version: 1, data: data }), "application/json");
+  });
+
+  document.getElementById("backup-import").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file || typeof file.text !== "function") return;
+    if (file.size > 5 * 1024 * 1024) {
+      els["backup-message"].textContent = "ファイルが大きすぎます（5MBまで）。";
+      return;
+    }
+    file.text().then(function (text) {
+      var parsed = JSON.parse(text);
+      if (!parsed || parsed.app !== "pfc-calculator" || !parsed.data || typeof parsed.data !== "object") {
+        throw new Error("format");
+      }
+      if (!window.confirm("バックアップを読み込みますか？ この端末の今の記録は、バックアップの内容で置き換わります。")) return;
+      var next = sanitizeState(parsed.data);
+      // Pro かどうかはバックアップの言い分ではなく、ライセンスキーの署名で決める。
+      // 署名が確かめられなければ、この端末の今の Pro・キー・支払いの確認待ちをそのまま残す。
+      return verifyLicense(next.license).then(function (ok) {
+        if (!ok) {
+          next.pro = state.pro;
+          next.license = state.license;
+        } else {
+          next.pro = true;
+        }
+        next.pendingSession = state.pendingSession;
+        // 未来の日付の「今日」は受け付けない（端末の時計がずれていた場合など）。
+        if (next.day > todayString()) { next.day = todayString(); }
+        next.entries = next.entries.filter(function (x) { return !!findFood(x.foodId); });
+        state = next;
+        rollOverIfNeeded();
+        applyPlanTargets();
+        saveState();
+        renderAll();
+        els["backup-message"].textContent = "バックアップを読み込みました。";
+      });
+    }).catch(function () {
+      els["backup-message"].textContent = "このファイルは読み込めませんでした。このアプリで書き出したバックアップを選んでください。";
+    });
+    e.target.value = "";
   });
 
   var copyButton = document.getElementById("license-copy-button");

@@ -254,6 +254,33 @@ select:focus, input:focus {
   color: #6b6259;
 }
 
+/* からだの記録 */
+.inline-form { display: flex; gap: 8px; align-items: center; }
+.inline-form input { flex: 1; }
+.btn-inline { width: auto; margin-top: 0; padding: 10px 16px; }
+.span-2 { grid-column: span 2; }
+.plan-result { margin-top: 12px; padding: 12px; background: #f7f3ea; border-radius: 8px; }
+.plan-row { margin: 4px 0; font-size: 0.9rem; }
+.plan-result:empty { display: none; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* スコア */
+.score-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.score-big { font-size: 2.6rem; font-weight: bold; color: #4a6b3a; }
+.score-unit { font-size: 0.9rem; color: #6b6259; margin-left: 4px; }
+.score-side { font-size: 0.9rem; text-align: right; }
+.score-side strong { font-size: 1.15rem; color: #4a6b3a; }
+.score-items { list-style: none; padding: 0; margin: 12px 0 0; font-size: 0.9rem; color: #6b6259; }
+.score-items li { padding: 3px 0; }
+.score-items li.got { color: #2b2620; font-weight: bold; }
+
+/* バックアップ */
+.file-label { display: block; margin-top: 16px; font-weight: bold; }
+#backup-import { margin-top: 8px; }
+
 /* 小見出し */
 .subhead {
   margin: 24px 0 8px;
