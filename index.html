@@ -3,11 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://pfc-license.nebourocket.workers.dev; base-uri 'none'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://pfc-license.nebourocket.workers.dev; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <title>PFCかんたん計算ツール</title>
 <meta name="description" content="食品を選んでグラム数を入れるだけ。カロリーとPFC（たんぱく質・脂質・炭水化物）をかんたんに合計できる、無料の計算ツールです。">
 <link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#5a7d4a">
+<meta name="apple-mobile-web-app-title" content="PFC計算">
 </head>
 <body>
 <header class="header">

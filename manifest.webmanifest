@@ -1,0 +1,16 @@
+{
+  "name": "PFCかんたん計算ツール",
+  "short_name": "PFC計算",
+  "description": "食品を選んでグラム数を入れるだけ。カロリーとPFCをかんたんに合計できる計算ツールです。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#5a7d4a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
