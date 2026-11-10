@@ -2,7 +2,7 @@
 // 方針：いつもネットワークから最新を取り、つながらないときだけ保存した版を使う。
 // こうすると、アプリや config.js を更新したときに古い版が残り続けることがない。
 // 同じサイトのファイルだけを扱い、ライセンス発行 Worker など外部への通信には触れない。
-var CACHE = "pfc-calculator-v2";
+var CACHE = "pfc-calculator-v3";
 var SHELL = [
   "./", "index.html", "styles.css", "app.js", "foods.js", "off-foods.js", "config.js", "legal.html",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png",

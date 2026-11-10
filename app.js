@@ -1055,7 +1055,8 @@
    "score-best", "score-sum", "backup-message",
    "food-search", "food-search-count", "sets-locked", "sets-area", "set-name",
    "set-list", "set-empty", "set-message",
-   "weight-chart", "weight-chart-note", "plan-cycle", "workout-muscle", "volume-list"
+   "weight-chart", "weight-chart-note", "plan-cycle", "workout-muscle", "volume-list",
+   "plate", "plate-p", "plate-f", "plate-c", "plate-target", "remaining-kcal", "today-label", "chart-tip"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -1069,8 +1070,37 @@
     renderBar("p", t.p, targets.p);
     renderBar("f", t.f, targets.f);
     renderBar("c", t.c, targets.c);
+    renderPlate(t, targets);
     // スコアは合計と目標で決まるので、合計を描き直すたびに一緒に描き直す。
     renderScore();
+  }
+
+  // 今日の皿：P×4・F×9・C×4 の kcal を左から積み上げ、目標の位置に点線を引く。
+  function renderPlate(t, targets) {
+    if (!els["plate-p"]) return;
+    var pk = t.p * 4, fk = t.f * 9, ck = t.c * 4;
+    var scale = Math.max(targets.kcal, pk + fk + ck, t.kcal, 1);
+    els["plate-p"].style.width = (pk / scale * 100).toFixed(2) + "%";
+    els["plate-f"].style.width = (fk / scale * 100).toFixed(2) + "%";
+    els["plate-c"].style.width = (ck / scale * 100).toFixed(2) + "%";
+    var target = els["plate-target"];
+    if (targets.kcal > 0) {
+      target.style.display = "block";
+      target.style.left = (targets.kcal / scale * 100).toFixed(2) + "%";
+    } else {
+      target.style.display = "none";
+    }
+    els["plate"].setAttribute("aria-label", "今日のカロリーの内訳：たんぱく質 " + fmt(pk, 0) + "kcal、脂質 " +
+      fmt(fk, 0) + "kcal、炭水化物 " + fmt(ck, 0) + "kcal" +
+      (targets.kcal > 0 ? "（目標 " + fmt(targets.kcal, 0) + "kcal）" : ""));
+    var rem = els["remaining-kcal"];
+    if (targets.kcal > 0) {
+      var diff = targets.kcal - t.kcal;
+      rem.textContent = diff >= 0 ? "あと " + fmt(diff, 0) + " kcal" : fmt(-diff, 0) + " kcal オーバー";
+      rem.classList.toggle("is-over", diff < 0);
+    } else {
+      rem.textContent = "";
+    }
   }
 
   function renderBar(key, value, target) {
@@ -1312,13 +1342,33 @@
     var max = state.targets.kcal > 0 ? state.targets.kcal : 0;
     data.forEach(function (d) { if (d.kcal > max) max = d.kcal; });
     if (max <= 0) max = 1;
+    function showTip(d) {
+      els["chart-tip"].textContent = formatDateLabel(d.date) + (d.isToday ? "（今日）" : "") + "　" +
+        fmt(d.kcal, 0) + "kcal ・ P " + fmt(d.p, 0) + "g ・ F " + fmt(d.f, 0) + "g ・ C " + fmt(d.c, 0) + "g";
+    }
     data.forEach(function (d) {
       var col = document.createElement("div");
       col.className = "chart-col";
+      col.tabIndex = 0;
+      col.setAttribute("aria-label", formatDateLabel(d.date) + " " + fmt(d.kcal, 0) + "kcal");
       var bar = document.createElement("div");
       bar.className = "chart-bar" + (d.isToday ? " today" : "");
       bar.style.height = Math.round((d.kcal / max) * 100) + "%";
-      bar.title = d.label + "：" + fmt(d.kcal, 0) + "kcal";
+      // たんぱく質・脂質・炭水化物の kcal の割合で、棒の中を積み上げる。
+      [["p", d.p * 4, "var(--p)"], ["f", d.f * 9, "var(--f)"], ["c", d.c * 4, "var(--c)"]].forEach(function (x) {
+        if (x[1] <= 0) return;
+        var seg = document.createElement("span");
+        seg.style.flex = x[1].toFixed(1) + " 1 0px";
+        seg.style.background = x[2];
+        bar.appendChild(seg);
+      });
+      ["mouseenter", "focus", "click"].forEach(function (type) {
+        col.addEventListener(type, function () {
+          Array.prototype.forEach.call(plot.children, function (c) { if (c.classList) c.classList.remove("is-active"); });
+          col.classList.add("is-active");
+          showTip(d);
+        });
+      });
       col.appendChild(bar);
       plot.appendChild(col);
       var label = document.createElement("span");
@@ -1981,6 +2031,32 @@
   }
 
   renderAll();
+
+  // ---------- タブ ----------
+  // どのタブを開いていたかは、その端末のブラウザにだけ覚えておく（使えなくても動く）。
+  (function setupTabs() {
+    if (!document.querySelectorAll) return;
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+    var panels = Array.prototype.slice.call(document.querySelectorAll(".panel"));
+    function show(name, focusTop) {
+      if (!panels.some(function (p) { return p.getAttribute("data-panel") === name; })) name = "today";
+      panels.forEach(function (p) { p.hidden = p.getAttribute("data-panel") !== name; });
+      tabs.forEach(function (t) {
+        if (t.getAttribute("data-tab") === name) t.setAttribute("aria-current", "page");
+        else t.removeAttribute("aria-current");
+      });
+      try { localStorage.setItem("pfc-calculator-tab", name); } catch (e) { /* 覚えられなくても続ける */ }
+      if (focusTop && window.scrollTo) window.scrollTo(0, 0);
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener("click", function () { show(t.getAttribute("data-tab"), true); });
+    });
+    var saved = null;
+    try { saved = localStorage.getItem("pfc-calculator-tab"); } catch (e) { saved = null; }
+    show(saved || "today", false);
+  })();
+
+  if (els["today-label"]) els["today-label"].textContent = formatDateLabel(todayString());
 
   // ホーム画面に追加したときにオフラインでも開けるよう、Service Worker を登録する（https のときだけ）。
   if (typeof navigator !== "undefined" && navigator.serviceWorker &&

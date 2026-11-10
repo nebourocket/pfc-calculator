@@ -653,6 +653,24 @@ function readProCode() {
     }
   }
 
+  // ============ 今日の皿（積み上げバー） ============
+  console.log("[今日の皿]");
+  {
+    const st = makeLocalStorage();
+    st.setItem(STORAGE_KEY, JSON.stringify({ targets: { kcal: 2000, p: 100, f: 60, c: 250 }, entries: [{ id: "a", foodId: "chicken-breast", grams: 200 }] }));
+    const env = launch(st);
+    const w = (id) => parseFloat(byId(env, id).style.width);
+    // 鶏むね 200g：P 46.6g×4＝186.4、F 3.8g×9＝34.2、C 0.2g×4＝0.8（目標 2,000kcal が全体の幅）
+    check("たんぱく質の幅は 186.4/2000", Math.abs(w("plate-p") - 9.32) < 0.01);
+    check("脂質の幅は 34.2/2000", Math.abs(w("plate-f") - 1.71) < 0.01);
+    check("目標の線は右端（まだ目標未満）", byId(env, "plate-target").style.left === "100.00%");
+    check("残りのカロリーを表示", text(env, "remaining-kcal") === "あと 1,790 kcal");
+    setVal(env, "food-select", "rice"); setVal(env, "grams-input", "1300");
+    submit(env, "add-form");
+    check("目標を超えるとオーバーと表示", text(env, "remaining-kcal").includes("オーバー") && byId(env, "remaining-kcal").classList.contains("is-over"));
+    check("超えたら目標の線は左に寄る", parseFloat(byId(env, "plate-target").style.left) < 100);
+  }
+
   // ============ 食品の検索・セット ============
   console.log("[食品の検索・セット]");
   {
