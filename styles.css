@@ -295,6 +295,32 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
 .file-label { display: block; margin-top: 16px; }
 #backup-import { margin-top: 8px; max-width: 100%; }
 
+/* ---------- 最近食べたもの ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 14px;
+  min-height: 40px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip:hover { border-color: var(--brand); }
+.chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
+.chip-grams { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.pro-callout { padding: 12px 14px; background: var(--brand-soft); color: var(--ink-2); border-radius: 12px; margin-top: 28px; }
+
 /* ---------- 一覧 ---------- */
 .entries { list-style: none; margin: 0; padding: 0; }
 
