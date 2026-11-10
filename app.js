@@ -24,6 +24,7 @@
   var CYCLE_SHIFT = 0.1;             // トレ日に上乗せする割合（目標カロリーの10%）
   var MUSCLES = ["胸", "背中", "脚", "肩", "腕", "腹", "その他"];
   var MAX_SEARCH_RESULTS = 100;      // 食品の検索で一度に出す件数
+  var MAX_RECENT = 12;               // 「最近食べたもの」に出す数
   var MAX_MEAL_SETS = 30;            // 登録できるセットの数
   var MAX_SET_ITEMS = 30;            // 1つのセットに入れられる食品の数
 
@@ -317,6 +318,33 @@
     return out;
   }
 
+  // 最近食べたもの：[{ foodId, grams }]（新しい順、同じ食品は1つ）
+  function sanitizeRecent(list) {
+    if (!Array.isArray(list)) return [];
+    var out = [], seen = {};
+    list.forEach(function (x) {
+      if (!x || typeof x.foodId !== "string" || seen[x.foodId] || out.length >= MAX_RECENT) return;
+      var g = finiteNumber(x.grams);
+      if (g === null || g <= 0 || g > MAX_GRAMS) return;
+      seen[x.foodId] = true;
+      out.push({ foodId: x.foodId.slice(0, 80), grams: g });
+    });
+    return out;
+  }
+
+  // 前に記録した日の食べたもの：{ date, entries }（日付が変わるときに残す）
+  function sanitizeLastDay(x) {
+    if (!x || typeof x !== "object" || !isDateString(x.date)) return null;
+    var entries = sanitizeEntries(x.entries);
+    return entries.length ? { date: x.date, entries: entries } : null;
+  }
+
+  function rememberRecent(foodId, grams) {
+    state.recentFoods = [{ foodId: foodId, grams: grams }]
+      .concat(state.recentFoods.filter(function (x) { return x.foodId !== foodId; }))
+      .slice(0, MAX_RECENT);
+  }
+
   // 保存データ（またはバックアップ）を、使える形に検証して返す。
   function sanitizeState(parsed) {
     return {
@@ -333,7 +361,9 @@
       workouts: sanitizeWorkouts(parsed.workouts),
       plan: sanitizePlan(parsed.plan),
       scores: sanitizeScores(parsed.scores),
-      mealSets: sanitizeMealSets(parsed.mealSets)
+      mealSets: sanitizeMealSets(parsed.mealSets),
+      recentFoods: sanitizeRecent(parsed.recentFoods),
+      lastDay: sanitizeLastDay(parsed.lastDay)
     };
   }
 
@@ -342,7 +372,8 @@
       entries: [], customFoods: [], targets: sanitizeTargets(null),
       pro: false, day: todayString(), history: {}, profile: null,
       license: null, pendingSession: null,
-      weights: {}, workouts: {}, plan: null, scores: {}, mealSets: []
+      weights: {}, workouts: {}, plan: null, scores: {}, mealSets: [],
+      recentFoods: [], lastDay: null
     };
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -1022,6 +1053,10 @@
     var t = totals();
     if (state.entries.length > 0) {
       state.history[state.day] = t;
+      state.lastDay = {
+        date: state.day,
+        entries: state.entries.map(function (e) { return { id: e.id, foodId: e.foodId, grams: e.grams }; })
+      };
     }
     var past = dayScore(t, state.targets, state.weights[state.day] !== undefined,
       !!(state.workouts[state.day] && state.workouts[state.day].length));
@@ -1056,7 +1091,8 @@
    "food-search", "food-search-count", "sets-locked", "sets-area", "set-name",
    "set-list", "set-empty", "set-message",
    "weight-chart", "weight-chart-note", "plan-cycle", "workout-muscle", "volume-list",
-   "plate", "plate-p", "plate-f", "plate-c", "plate-target", "remaining-kcal", "today-label", "chart-tip"
+   "plate", "plate-p", "plate-f", "plate-c", "plate-target", "remaining-kcal", "today-label", "chart-tip",
+   "body-pro-area", "recent-area", "recent-list", "copy-last-button"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -1416,11 +1452,11 @@
 
   function signed(n, decimals) { return (n > 0 ? "+" : n < 0 ? "−" : "±") + fmt(Math.abs(n), decimals); }
 
+  // 体重・筋トレの記録は無料。部位ごとのセット数と計画（自動計算）は Pro。
   function renderBody() {
     if (!els["body-locked"]) return;
     els["body-locked"].classList.toggle("hidden", state.pro);
-    els["body-area"].classList.toggle("hidden", !state.pro);
-    if (!state.pro) return;
+    els["body-pro-area"].classList.toggle("hidden", !state.pro);
     var today = todayString();
 
     // 体重
@@ -1476,6 +1512,8 @@
         renderAll();
       }));
     });
+
+    if (!state.pro) return;
 
     // 部位ごとのセット数（直近7日）
     var vol = weeklyVolume(today);
@@ -1603,6 +1641,46 @@
     box.appendChild(svg);
   }
 
+  function renderRecent() {
+    if (!els["recent-area"]) return;
+    var items = state.recentFoods.filter(function (x) { return !!findFood(x.foodId); });
+    els["recent-area"].classList.toggle("hidden", items.length === 0);
+    var box = els["recent-list"];
+    box.innerHTML = "";
+    items.forEach(function (x) {
+      var food = findFood(x.foodId);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.setAttribute("aria-label", food.name + " " + fmt(x.grams, 0) + "g を追加");
+      var name = document.createElement("span");
+      name.className = "chip-name";
+      name.textContent = food.name;
+      var g = document.createElement("span");
+      g.className = "chip-grams";
+      g.textContent = fmt(x.grams, 0) + "g";
+      btn.appendChild(name);
+      btn.appendChild(g);
+      btn.addEventListener("click", function () {
+        state.entries.push({ id: nextId("e"), foodId: x.foodId, grams: x.grams });
+        rememberRecent(x.foodId, x.grams);
+        saveState();
+        renderAll();
+      });
+      box.appendChild(btn);
+    });
+
+    var copy = els["copy-last-button"];
+    var last = state.lastDay;
+    var usable = last ? last.entries.filter(function (e) { return !!findFood(e.foodId); }) : [];
+    copy.classList.toggle("hidden", !usable.length);
+    if (usable.length) {
+      var yesterday = addDays(todayString(), -1);
+      copy.textContent = (last.date === yesterday ? "昨日" : formatDateLabel(last.date)) +
+        "と同じものを追加する（" + usable.length + "品）";
+    }
+  }
+
   function renderSets() {
     if (!els["sets-locked"]) return;
     els["sets-locked"].classList.toggle("hidden", state.pro);
@@ -1707,6 +1785,7 @@
     renderProfile();
     renderBody();
     renderSets();
+    renderRecent();
   }
 
   // ---------- イベント ----------
@@ -1722,9 +1801,11 @@
       foodId: foodId,
       grams: grams
     });
+    rememberRecent(foodId, grams);
     saveState();
     renderSummary();
     renderEntries();
+    renderRecent();
     els["grams-input"].value = "100";
   });
 
@@ -1859,6 +1940,16 @@
     downloadCsv("pfc-history.csv", buildHistoryCsv());
   });
 
+  els["copy-last-button"].addEventListener("click", function () {
+    var last = state.lastDay;
+    if (!last) return;
+    last.entries.forEach(function (e) {
+      if (findFood(e.foodId)) state.entries.push({ id: nextId("e"), foodId: e.foodId, grams: e.grams });
+    });
+    saveState();
+    renderAll();
+  });
+
   // ---------- 食品の検索・セット ----------
   if (els["food-search"]) {
     els["food-search"].addEventListener("input", function () { renderSelect(); });
@@ -1892,7 +1983,6 @@
   // ---------- からだの記録（Pro） ----------
   document.getElementById("weight-form").addEventListener("submit", function (e) {
     e.preventDefault();
-    if (!state.pro) return;
     var kg = parseFloat(els["weight-input"].value);
     if (!isFinite(kg) || kg < 20 || kg > 300) return;
     state.weights[todayString()] = Math.round(kg * 10) / 10;
@@ -1903,7 +1993,6 @@
 
   document.getElementById("workout-form").addEventListener("submit", function (e) {
     e.preventDefault();
-    if (!state.pro) return;
     var today = todayString();
     var item = sanitizeWorkoutItem({
       id: nextId("w"),

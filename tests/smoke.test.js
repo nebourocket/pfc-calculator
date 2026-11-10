@@ -671,6 +671,38 @@ function readProCode() {
     check("超えたら目標の線は左に寄る", parseFloat(byId(env, "plate-target").style.left) < 100);
   }
 
+  // ============ 最近食べたもの・前日と同じもの（無料） ============
+  console.log("[最近食べたもの]");
+  {
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const ago = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+    const st = makeLocalStorage();
+    const env = launch(st);
+    const saved = () => JSON.parse(st.getItem(STORAGE_KEY));
+    check("最初は最近食べたものを出さない", byId(env, "recent-area").classList.contains("hidden"));
+    setVal(env, "food-select", "rice"); setVal(env, "grams-input", "180"); submit(env, "add-form");
+    setVal(env, "food-select", "egg"); setVal(env, "grams-input", "50"); submit(env, "add-form");
+    setVal(env, "food-select", "rice"); setVal(env, "grams-input", "200"); submit(env, "add-form");
+    const chips = byId(env, "recent-list").children;
+    check("同じ食品は1つにまとめ、新しい順", chips.length === 2 && chips[0].textContent.includes("ごはん") && chips[0].textContent.includes("200g"));
+    chips[1].click();
+    check("ワンタップで今日の記録に追加", saved().entries.length === 4 && saved().entries[3].foodId === "egg" && saved().entries[3].grams === 50);
+
+    // 日付が変わると前日の食べたものを残し、1つのボタンで追加できる
+    const st2 = makeLocalStorage();
+    st2.setItem(STORAGE_KEY, JSON.stringify({ day: ago(1), entries: [{ id: "a", foodId: "rice", grams: 150 }, { id: "b", foodId: "natto", grams: 45 }] }));
+    const env2 = launch(st2);
+    const s2 = () => JSON.parse(st2.getItem(STORAGE_KEY));
+    check("前日の食べたものが残る", s2().lastDay && s2().lastDay.date === ago(1) && s2().lastDay.entries.length === 2);
+    check("「昨日と同じもの」ボタンが出る", !byId(env2, "copy-last-button").classList.contains("hidden") && text(env2, "copy-last-button").includes("昨日と同じものを追加する（2品）"));
+    byId(env2, "copy-last-button").click();
+    check("押すと昨日の食べたものが今日に入る", s2().entries.length === 2 && text(env2, "total-kcal") !== "0");
+    const st3 = makeLocalStorage();
+    st3.setItem(STORAGE_KEY, JSON.stringify({ day: ago(0), lastDay: { date: ago(3), entries: [{ id: "a", foodId: "rice", grams: 150 }] } }));
+    const env3 = launch(st3);
+    check("昨日でなければ日付を書く", text(env3, "copy-last-button").includes("日（") && !text(env3, "copy-last-button").startsWith("昨日"));
+  }
+
   // ============ 食品の検索・セット ============
   console.log("[食品の検索・セット]");
   {
@@ -753,8 +785,19 @@ function readProCode() {
     // 無料版では隠れている
     {
       const env = launch(makeLocalStorage());
-      check("無料版ではからだの記録が隠れている", byId(env, "body-area").classList.contains("hidden"));
-      check("無料版ではロックの説明が見える", !byId(env, "body-locked").classList.contains("hidden"));
+      check("無料版でもからだの記録（体重・筋トレ）は使える", !byId(env, "body-area").classList.contains("hidden"));
+      check("無料版では計画・部位のセット数が隠れている", byId(env, "body-pro-area").classList.contains("hidden"));
+      check("無料版では Pro の案内が見える", !byId(env, "body-locked").classList.contains("hidden"));
+      const fst = makeLocalStorage();
+      const fenv = launch(fst);
+      setVal(fenv, "weight-input", "60.5");
+      submit(fenv, "weight-form");
+      setVal(fenv, "workout-name", "スクワット"); setVal(fenv, "workout-kg", "40"); setVal(fenv, "workout-reps", "10"); setVal(fenv, "workout-sets", "3");
+      submit(fenv, "workout-form");
+      const fs2 = JSON.parse(fst.getItem(STORAGE_KEY));
+      check("無料版でも体重を記録できる", fs2.weights[today] === 60.5);
+      check("無料版でも筋トレを記録できる", fs2.workouts[today].length === 1);
+      check("無料版では部位のセット数を描かない", byId(fenv, "volume-list").children.length === 0);
       check("無料版ではスコアが隠れている", byId(env, "score-area").classList.contains("hidden"));
     }
 
