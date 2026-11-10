@@ -64,6 +64,7 @@
     <p id="empty-message" class="empty">まだ何も追加されていません。上のフォームから食品を選んでみてください。</p>
     <ul id="entry-list" class="entries"></ul>
     <button id="reset-button" class="btn-secondary" type="button">今日の記録をすべて消す</button>
+    <button id="today-csv-button" class="btn-secondary hidden" type="button">今日の記録をCSVで書き出す（Pro）</button>
   </section>
 
   <!-- 過去の記録 -->
@@ -74,10 +75,23 @@
     <p class="note">直近7日分を表示しています。</p>
   </section>
 
+  <!-- 記録のグラフ（Pro） -->
+  <section class="card" aria-label="記録のグラフ">
+    <h2>記録のグラフ <span class="tag">Pro</span></h2>
+    <p id="chart-locked" class="note">過去14日間のカロリーの推移をグラフでふり返れるのは、Proの機能です。</p>
+    <div id="chart-area" class="hidden">
+      <div id="chart-plot" class="chart-plot"></div>
+      <div id="chart-labels" class="chart-labels"></div>
+      <p id="chart-empty" class="empty hidden">まだデータがありません。記録がたまると、ここにグラフが表示されます。</p>
+      <p class="note">直近14日間のカロリー（kcal）の推移です。オレンジの点線は、1日の目標カロリーの位置を表します。</p>
+      <button id="history-csv-button" class="btn-secondary" type="button">履歴をCSVで書き出す</button>
+    </div>
+  </section>
+
   <!-- 自由枠（自分の食品を登録） -->
   <section class="card" aria-label="自分の食品を登録">
     <h2>自分の食品を登録する <span class="tag">自由枠</span></h2>
-    <p class="note">一覧にない食品は、100gあたりの値を入れて登録できます。無料版は5件まで登録できます。</p>
+    <p class="note">一覧にない食品は、100gあたりの値を入れて登録できます。無料版は5件まで、Proでは200件まで登録できます。</p>
     <form id="custom-form">
       <label for="custom-name">食品名</label>
       <input id="custom-name" type="text" maxlength="30" placeholder="例：自家製カレー" required>
@@ -102,7 +116,7 @@
       <button type="submit" class="btn-primary">登録する</button>
     </form>
     <ul id="custom-list" class="entries"></ul>
-    <p id="custom-limit-message" class="note hidden">無料版の登録上限（5件）に達しました。Proでは上限が広がります。</p>
+    <p id="custom-limit-message" class="note hidden">無料版の登録上限（5件）に達しました。Proでは200件まで登録できます。</p>
   </section>
 
   <!-- 目標設定 -->
@@ -129,30 +143,83 @@
       </div>
       <p class="note">入力すると自動で保存されます。</p>
     </form>
+
+    <h3 class="subhead">目標の自動計算 <span class="tag">Pro</span></h3>
+    <p id="auto-calc-locked" class="note">性別・年齢・身長・体重・活動レベル・目的（減量／維持／増量）から、目標カロリーとPFCの目安を自動で計算できるのは、Proの機能です。</p>
+    <div id="auto-calc-area" class="hidden">
+      <div class="form-row">
+        <div>
+          <label for="auto-sex">性別</label>
+          <select id="auto-sex">
+            <option value="male">男性</option>
+            <option value="female">女性</option>
+          </select>
+        </div>
+        <div>
+          <label for="auto-age">年齢</label>
+          <input id="auto-age" type="number" inputmode="numeric" min="10" max="100" step="1" placeholder="例：30">
+        </div>
+        <div>
+          <label for="auto-height">身長（cm）</label>
+          <input id="auto-height" type="number" inputmode="decimal" min="100" max="250" step="0.1" placeholder="例：170">
+        </div>
+        <div>
+          <label for="auto-weight">体重（kg）</label>
+          <input id="auto-weight" type="number" inputmode="decimal" min="20" max="300" step="0.1" placeholder="例：65">
+        </div>
+        <div>
+          <label for="auto-activity">活動レベル</label>
+          <select id="auto-activity">
+            <option value="1.2">ほぼ座り仕事（運動はほとんどなし）</option>
+            <option value="1.375">軽い運動（週1〜3回）</option>
+            <option value="1.55" selected>中くらいの運動（週3〜5回）</option>
+            <option value="1.725">活発な運動（週6〜7回）</option>
+          </select>
+        </div>
+        <div>
+          <label for="auto-goal">目的</label>
+          <select id="auto-goal">
+            <option value="cut">減量</option>
+            <option value="maintain" selected>維持</option>
+            <option value="bulk">増量</option>
+          </select>
+        </div>
+      </div>
+      <button id="auto-calc-button" class="btn-primary" type="button">計算して目標に反映する</button>
+      <p id="auto-calc-result" class="note"></p>
+      <p class="note">計算の前提：基礎代謝は Mifflin-St Jeor 式、1日の消費目安は基礎代謝×活動レベル。目標カロリーは、減量＝消費目安の−20%（ただし基礎代謝は下回らない）、維持＝そのまま、増量＝+10%。PFC の目安は、たんぱく質＝体重×2g、脂質＝目標カロリーの25%、炭水化物＝残りです。あくまで一般的な目安で、医療・栄養指導ではありません。体調に不安がある方は専門家にご相談ください。入力した数値は、この端末の中にだけ保存されます。</p>
+    </div>
   </section>
 
   <!-- Pro -->
   <section class="card pro" aria-label="Proについて">
-    <h2>PFC計算ツール Pro <span class="tag">準備中</span></h2>
-    <p>もっと便利に使いたい方へ。Proでは次の機能が使えるようになります。</p>
-    <ul class="pro-features">
-      <li>過去の記録をグラフでふり返る</li>
-      <li>体重や目的から目標カロリー・PFCを自動計算</li>
-      <li>登録できる食品の数を広げる</li>
-      <li>記録をCSVで書き出す</li>
-    </ul>
-    <form id="pro-form">
-      <label for="pro-code">利用コードをお持ちの方はこちら</label>
-      <input id="pro-code" type="text" inputmode="text" autocomplete="off" placeholder="利用コードを入力">
-      <button type="submit" class="btn-primary">Proを有効にする</button>
-    </form>
-    <p id="pro-message" class="note"></p>
-    <p class="note">利用コードは、noteメンバーシップ「寝坊ロケットの創作室」の会員の方へお配りする予定です。詳しくは下のリンクからどうぞ。</p>
+    <h2>PFC計算ツール Pro</h2>
+    <div id="pro-locked">
+      <p>もっと便利に使いたい方へ。Proでは次の機能が使えます。</p>
+      <ul class="pro-features">
+        <li>過去14日間の記録をグラフでふり返る</li>
+        <li>体重や目的から目標カロリー・PFCを自動計算</li>
+        <li>自分の食品を200件まで登録できる</li>
+        <li>記録をCSVで書き出す</li>
+      </ul>
+      <form id="pro-form">
+        <label for="pro-code">利用コードをお持ちの方はこちら</label>
+        <input id="pro-code" type="text" inputmode="text" autocomplete="off" placeholder="利用コードを入力">
+        <button type="submit" class="btn-primary">Proを有効にする</button>
+      </form>
+      <p id="pro-message" class="note"></p>
+      <p class="note">利用コードは、noteメンバーシップ「寝坊ロケットの創作室」（月額500円）の会員特典として配布しています。Pro単体のサブスクリプション（月200円予定）は準備中です。</p>
+      <p class="note">このアプリでクレジットカードなどの決済情報を入力することはありません。お支払い情報は、将来の単体サブスクリプションを含め、決済事業者（Stripe）のページでのみ扱い、このアプリに保存されることはありません。</p>
+    </div>
+    <div id="pro-active" class="hidden">
+      <p>Proが有効になっています。グラフ・自動計算・CSV書き出し・食品登録200件まで、すべて使えます。ありがとうございます。</p>
+      <button id="pro-disable-button" class="btn-secondary" type="button">Proをやめる（解錠を解除する）</button>
+    </div>
   </section>
 </main>
 
 <footer class="footer">
-  <p>入力したデータは、このブラウザ内にのみ保存されます。サーバーには送られません。</p>
+  <p>記録はあなたの端末の中（このブラウザの localStorage）だけに保存されます。アカウント登録は不要で、データが外部に送られることはありません。</p>
   <nav>
     <a href="https://note.com/nebourocket" target="_blank" rel="noopener">note（寝坊ロケット）</a>
     <a href="https://note.com/nebourocket/membership" target="_blank" rel="noopener">noteメンバーシップ「寝坊ロケットの創作室」</a>

@@ -207,6 +207,59 @@ select:focus, input:focus {
   font-size: 0.95rem;
 }
 
+/* グラフ */
+.chart-plot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 150px;
+  border-bottom: 1px solid #e8e0d5;
+}
+
+.chart-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.chart-bar {
+  width: 70%;
+  background: #a9c48d;
+  border-radius: 3px 3px 0 0;
+}
+
+.chart-bar.today { background: #5a7d4a; }
+
+.chart-target-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed #c2703d;
+  pointer-events: none;
+}
+
+.chart-labels {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.chart-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 0.6rem;
+  color: #6b6259;
+}
+
+/* 小見出し */
+.subhead {
+  margin: 24px 0 8px;
+  font-size: 1rem;
+}
+
 /* Pro */
 .pro { background: #f4f1e8; }
 
