@@ -74,13 +74,16 @@
   <section class="card" aria-label="食品を追加">
     <h2>食品を追加</h2>
     <form id="add-form">
+      <label for="food-search">食品を探す</label>
+      <input id="food-search" type="search" autocomplete="off" placeholder="例：むね、とり むね、ヨーグルト、さば">
+      <p id="food-search-count" class="note" role="status"></p>
       <label for="food-select">食品</label>
       <select id="food-select"></select>
       <label for="grams-input">量（g）</label>
       <input id="grams-input" type="number" inputmode="decimal" min="1" max="5000" step="1" value="100" required>
       <button type="submit" class="btn-primary">追加する</button>
     </form>
-    <p class="note">食品データは日本食品標準成分表（八訂）をもとにした概算値です。調理方法や銘柄により前後します。</p>
+    <p class="note">食品データは文部科学省「日本食品標準成分表（八訂）増補2023年」の値です（プロテインのみ製品の目安値）。調理方法や銘柄により前後します。</p>
   </section>
 
   <!-- 今日食べたもの -->
@@ -90,6 +93,19 @@
     <ul id="entry-list" class="entries"></ul>
     <button id="reset-button" class="btn-secondary" type="button">今日の記録をすべて消す</button>
     <button id="today-csv-button" class="btn-secondary hidden" type="button">今日の記録をCSVで書き出す（Pro）</button>
+
+    <h3 class="subhead">よく食べる組み合わせ <span class="tag">Pro</span></h3>
+    <p id="sets-locked" class="note">いつもの朝ごはんなど、よく食べる組み合わせをセットとして登録し、ワンタップで追加できるのは、Proの機能です。</p>
+    <div id="sets-area" class="hidden">
+      <form id="set-save-form" class="inline-form">
+        <label for="set-name" class="visually-hidden">セットの名前</label>
+        <input id="set-name" type="text" maxlength="30" autocomplete="off" placeholder="例：いつもの朝ごはん">
+        <button type="submit" class="btn-primary btn-inline">今日の記録を登録</button>
+      </form>
+      <p id="set-message" class="note" role="status"></p>
+      <p id="set-empty" class="empty">まだセットはありません。今日の記録を登録すると、ここに並びます。</p>
+      <ul id="set-list" class="entries"></ul>
+    </div>
   </section>
 
   <!-- 過去の記録 -->
