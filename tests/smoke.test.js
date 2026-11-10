@@ -9,6 +9,7 @@ const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
 const foodsCode = fs.readFileSync(path.join(ROOT, "foods.js"), "utf8");
+const offFoodsCode = fs.readFileSync(path.join(ROOT, "off-foods.js"), "utf8");
 const appCode = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 
 // ---------- 簡易DOMスタブ ----------
@@ -158,6 +159,7 @@ function launch(storage, opts) {
   };
   vm.createContext(sandbox);
   vm.runInContext(foodsCode, sandbox);
+  vm.runInContext(offFoodsCode, sandbox);
   vm.runInContext(appCode, sandbox);
   return { document: documentStub, storage, replaced };
 }
@@ -675,6 +677,15 @@ function readProCode() {
     check("「ごはん」で成分表の「めし」も見つかる", optionValues(env).includes("m01154"));
     search("生");
     check("当たりが多すぎるときは100件まで", optionValues(env).length === 100 && text(env, "food-search-count").includes("先頭の100件"));
+    {
+      const w = {}; new Function("window", offFoodsCode)(w);
+      const sample = w.OFF_FOODS[0];
+      search(sample.name.split("（")[0]);
+      check("市販品も探せる（" + sample.name + "）", optionValues(env).includes(sample.id));
+      const ids = new Set(w.OFF_FOODS.map((f) => f.id));
+      check("市販品の id は重ならない", ids.size === w.OFF_FOODS.length);
+      check("市販品は kcal と PFC が整合している", w.OFF_FOODS.every((f) => Math.abs(f.kcal - (f.p * 4 + f.f * 9 + f.c * 4)) <= Math.max(25.5, f.kcal * 0.25 + 0.5)));
+    }
     search("");
     check("空にすると、よく使う食品に戻る", optionValues(env).length < 120);
   }

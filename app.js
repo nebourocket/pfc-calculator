@@ -47,7 +47,9 @@
   var SESSION_ID_RE = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 
   var DEFAULT_TARGETS = { kcal: 2000, p: 100, f: 60, c: 250 };
-  var FOODS = Array.isArray(window.FOODS) ? window.FOODS : [];
+  // 成分表（foods.js）と市販品（off-foods.js、Open Food Facts・ODbL）をまとめて使う。
+  var FOODS = (Array.isArray(window.FOODS) ? window.FOODS : [])
+    .concat(Array.isArray(window.OFF_FOODS) ? window.OFF_FOODS : []);
 
   // ---------- 小物 ----------
   var idCounter = 0;
@@ -1146,7 +1148,7 @@
     }
     if (els["food-search-count"]) {
       els["food-search-count"].textContent = !words.length
-        ? "よく使う食品を表示しています。ほかの食品（成分表の全" + FOODS.length + "品）は、上の欄で探せます。"
+        ? "よく使う食品を表示しています。ほかの食品（成分表と市販品の全" + FOODS.length + "品）は、上の欄で探せます。"
         : !foods.length
           ? "見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。"
           : total > MAX_SEARCH_RESULTS
