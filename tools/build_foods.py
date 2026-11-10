@@ -3,9 +3,14 @@
 数値は手で打たず、すべてこのスクリプトが Excel から読み取ります。
 使う列（成分識別子）: ENERC_KCAL（エネルギー kcal）・PROT-（たんぱく質）・FAT-（脂質）・CHOCDF-（炭水化物）。
 Excel は https://www.mext.go.jp/a_menu/syokuhinseibun/mext_00001.html の「第2章（データ）」。
+文部科学省ウェブサイト利用規約（https://www.mext.go.jp/b_menu/1351168.htm）に従い、出典と加工したことを表示する。
+
+SELECTION の食品は分かりやすい名前を付けた「よく使う食品」（common: true）。
+それ以外の全食品は成分表の正式名で入れる（4項目のどれかが未測定 "-" の食品だけ除く）。
 
 実行: python3 -I tools/build_foods.py <Excel のパス> foods.js
 """
+import json
 import re
 import sys
 
@@ -129,7 +134,7 @@ SELECTION = [
 ]
 
 # 成分表に無いもの。値は以前から foods.js にあった目安値をそのまま使う（製品によって大きく違う）。
-EXTRA = '  { id: "protein", name: "プロテイン（ホエイ・粉末・目安）", category: "その他", kcal: 390, p: 78.0, f: 4.0, c: 6.0, source: "" }'
+EXTRA = '  { "id": "protein", "name": "プロテイン（ホエイ・粉末・目安）", "category": "その他", "kcal": 390, "p": 78.0, "f": 4.0, "c": 6.0, "source": "", "common": true }'
 
 COLUMNS = {"kcal": "ENERC_KCAL", "p": "PROT-", "f": "FAT-", "c": "CHOCDF-"}
 
@@ -151,15 +156,27 @@ def main(xlsx, out):
     ws = wb["表全体"]
     header = next(ws.iter_rows(min_row=12, max_row=12, values_only=True))
     col = {k: header.index(v) for k, v in COLUMNS.items()}
-    rows = {r[1]: r for r in ws.iter_rows(min_row=13, values_only=True) if r[1]}
+    rows = {str(r[1]): r for r in ws.iter_rows(min_row=13, values_only=True) if r[1]}
 
-    lines = [
-        "// 食品データ（100gあたり）— tools/build_foods.py が自動で作るファイルです。手で直さないでください。",
-        "// 出典：文部科学省「日本食品標準成分表（八訂）増補2023年」（正誤表 令和8年3月27日 反映済みのデータ）。",
-        "// kcal＝エネルギー、p＝たんぱく質、f＝脂質、c＝炭水化物。調理方法・銘柄により前後します。",
-        "// プロテインは成分表に無く、製品によって大きく異なるため、代表的なホエイプロテインの目安値です。",
-        "window.FOODS = [",
-    ]
+    # シート名「1穀類」「10魚介類」などから、食品群の名前を取る。
+    groups = {}
+    for sheet in wb.sheetnames:
+        m = re.match(r"^(\d+)(.+)$", sheet)
+        if m:
+            groups["%02d" % int(m.group(1))] = m.group(2)
+
+    def clean(name):
+        return re.sub(r"\s+", " ", str(name).replace("　", " ")).strip()
+
+    def entry(fid, name, category, v, source, common):
+        item = {"id": fid, "name": name, "category": category}
+        item.update({k: round(v[k], 1) if k != "kcal" else round(v[k]) for k in ("kcal", "p", "f", "c")})
+        item["source"] = source
+        if common:
+            item["common"] = True
+        return "  " + json.dumps(item, ensure_ascii=False)
+
+    items = []
     ids = set()
     for number, fid, name, category in SELECTION:
         if fid in ids:
@@ -169,15 +186,40 @@ def main(xlsx, out):
         if r is None:
             raise SystemExit("食品番号が見つかりません: " + number)
         v = {k: to_number(r[i]) for k, i in col.items()}
-        official = re.sub(r"\s+", " ", str(r[3]).replace("　", " ")).strip()
-        lines.append(
-            '  {{ id: "{id}", name: "{name}", category: "{cat}", kcal: {kcal:g}, p: {p:g}, f: {f:g}, c: {c:g}, '
-            'source: "{num} {off}" }},'.format(id=fid, name=name, cat=category, num=number, off=official, **v))
-    lines.append(EXTRA)
-    lines.append("];")
+        items.append(entry(fid, name, category, v, number + " " + clean(r[3]), True))
+    items.append(EXTRA)
+
+    # 残りの全食品（正式名）。表示名からは先頭の「＜魚類＞」のような見出しを外す。
+    chosen = {n for n, _, _, _ in SELECTION}
+    count = skipped = 0
+    for number in sorted(rows):
+        if number in chosen:
+            continue
+        r = rows[number]
+        try:
+            v = {k: to_number(r[i]) for k, i in col.items()}
+        except ValueError:
+            skipped += 1
+            continue
+        official = clean(r[3])
+        display = re.sub(r"^＜[^＞]*＞\s*", "", official)
+        items.append(entry("m" + number, display, groups[str(r[0])], v, number + " " + official, False))
+        count += 1
+
+    lines = [
+        "// 食品データ（100gあたり）— tools/build_foods.py が自動で作るファイルです。手で直さないでください。",
+        "// 出典：「日本食品標準成分表（八訂）増補2023年」（文部科学省）"
+        "（https://www.mext.go.jp/a_menu/syokuhinseibun/mext_00001.html）を加工して作成",
+        "// （正誤表 令和8年3月27日 反映済みのデータ。kcal＝エネルギー、p＝たんぱく質、f＝脂質、c＝炭水化物）",
+        "// common: true は「よく使う食品」（分かりやすい名前を付けたもの）。それ以外は成分表の正式名。",
+        "// プロテインは成分表に無く、製品によって大きく異なるため、代表的なホエイプロテインの目安値です。",
+        "window.FOODS = [",
+        ",\n".join(items),
+        "];",
+    ]
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
-    print("wrote", out, len(SELECTION) + 1, "foods")
+    print("wrote", out, "common", len(SELECTION) + 1, "others", count, "skipped", skipped)
 
 
 if __name__ == "__main__":

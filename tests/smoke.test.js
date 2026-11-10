@@ -250,8 +250,8 @@ console.log("[メインフロー]");
   submit(env, "custom-form");
   check("自由枠が1件登録される", byId(env, "custom-list").children.length === 1);
   const opts = byId(env, "food-select")._options();
-  const foodCount = (() => { const w = {}; new Function("window", foodsCode)(w); return w.FOODS.length; })();
-  check("セレクトに自由枠が増える（" + (foodCount + 1) + "件）", opts.length === foodCount + 1);
+  const commonCount = (() => { const w = {}; new Function("window", foodsCode)(w); return w.FOODS.filter((f) => f.common).length; })();
+  check("セレクトに自由枠が増える（よく使う食品＋1件）", opts.length === commonCount + 1);
   const customOpt = opts[opts.length - 1];
   setVal(env, "food-select", customOpt.value);
   setVal(env, "grams-input", "50");
@@ -657,8 +657,10 @@ function readProCode() {
     const optionValues = (env) => { const out = []; const walk = (el) => el.children.forEach((c) => { if (c.tagName === "OPTION") out.push(c._value); walk(c); }); walk(byId(env, "food-select")); return out; };
     const env = launch(makeLocalStorage());
     const search = (q) => { const el = byId(env, "food-search"); el.value = q; el.dispatch("input"); };
+    check("何も探していないときは、よく使う食品だけ並ぶ", optionValues(env).length < 120 && optionValues(env).includes("rice"));
+    check("何も探していないときは、全品を探せると案内", text(env, "food-search-count").includes("全"));
     search("ヨーグルト");
-    check("カタカナで探せる", optionValues(env).length >= 3 && optionValues(env).every((v) => v.startsWith("yogurt")));
+    check("カタカナで探せる（よく使う食品が先）", optionValues(env)[0].startsWith("yogurt") && optionValues(env).length >= 3);
     search("よーぐると");
     check("ひらがなでもカタカナの食品が見つかる", optionValues(env).includes("yogurt"));
     search("とり むね");
@@ -667,8 +669,14 @@ function readProCode() {
     check("見つかった先頭の食品が選ばれる", byId(env, "food-select").value === optionValues(env)[0]);
     search("ぜったいにないたべもの");
     check("見つからなければ案内を出す", text(env, "food-search-count").includes("見つかりませんでした"));
+    search("ぶり 焼き");
+    check("成分表の全食品からも探せる", optionValues(env).includes("m10242"));
+    search("ごはん");
+    check("「ごはん」で成分表の「めし」も見つかる", optionValues(env).includes("m01154"));
+    search("生");
+    check("当たりが多すぎるときは100件まで", optionValues(env).length === 100 && text(env, "food-search-count").includes("先頭の100件"));
     search("");
-    check("空にすると全部に戻る", optionValues(env).length > 100);
+    check("空にすると、よく使う食品に戻る", optionValues(env).length < 120);
   }
   {
     const st = makeLocalStorage();
