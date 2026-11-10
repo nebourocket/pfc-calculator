@@ -26,6 +26,7 @@
 - **成分表ベースの数値** — 日本食品標準成分表（八訂）増補2023年をもとにしています。
 - **記録は外に出ない** — 保存先はブラウザの localStorage だけ。サーバーに記録を送る仕組みそのものがありません。
 - **軽い・速い** — HTML・CSS・JavaScript だけ。外部ライブラリも広告も解析タグもありません。
+- **アプリのように使える** — スマホのブラウザで「ホーム画面に追加」すると、アプリのように開けます。電波がないところでも動きます。
 
 ## 🚀 使い方
 
@@ -161,6 +162,7 @@ node worker/test/license.test.mjs # ライセンス発行 Worker（Stripe への
 ファイルの役割は次のとおりです。
 
 - `index.html` / `styles.css` / `app.js` / `foods.js` — アプリ本体
+- `manifest.webmanifest` / `sw.js` / `icons/` — ホーム画面に追加するための設定・オフライン対応・アイコン（アイコンは Python で描いたもの）
 - `config.js` — 公開してよい設定（Payment Link の URL・Worker の URL・公開鍵）
 - `legal.html` — 特定商取引法に基づく表記
 - `worker/` — ライセンス発行 Worker（Cloudflare Workers）

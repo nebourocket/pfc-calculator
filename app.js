@@ -1618,6 +1618,12 @@
 
   renderAll();
 
+  // ホーム画面に追加したときにオフラインでも開けるよう、Service Worker を登録する（https のときだけ）。
+  if (typeof navigator !== "undefined" && navigator.serviceWorker &&
+      window.location && window.location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
+
   // Stripe から ?session_id=cs_... 付きで戻ってきたら、URL から消してから確認する
   // (ブラウザ履歴やリンク先への Referer に残さないため)。
   (function handleReturnFromCheckout() {
