@@ -81,10 +81,11 @@ main に入ると GitHub Pages に自動で反映され、「500円で Pro を�
 ## テストから本番への切り替え
 
 1. Stripe を本番モードにして、手順1の 3〜6（商品・Payment Link・制限付きキー）を作り直す。
-2. `npx wrangler@3 secret put STRIPE_SECRET_KEY` で本番のキー（`rk_live_...`）に入れ替える。
-3. `wrangler.toml` の `PAYMENT_LINK_ID` を本番の `plink_...` にして `npx wrangler@3 deploy`。
-4. `config.js` の `paymentLinkUrl` を本番の URL にして main に入れる。
-5. 自分で一度だけ本番で購入して、Pro が有効になることを確かめる（その後 Stripe から自分に返金できます）。
+2. **署名用の鍵も作り直す**（手順2）。`npx wrangler@3 secret put LICENSE_PRIVATE_JWK` で新しい秘密鍵に入れ替え、`config.js` の `licensePublicJwk` を新しい公開鍵にする。テスト中はテスト用カードで誰でもキーを作れたので、鍵を替えてそれらを使えなくするためです。
+3. `npx wrangler@3 secret put STRIPE_SECRET_KEY` で本番のキー（`rk_live_...`）に入れ替える。
+4. `wrangler.toml` の `PAYMENT_LINK_ID` を本番の `plink_...` にして `npx wrangler@3 deploy`。
+5. `config.js` の `paymentLinkUrl` を本番の URL にして main に入れる。
+6. 自分で一度だけ本番で購入して、Pro が有効になることを確かめる（その後 Stripe から自分に返金できます）。
 
 ## 運用でやること
 
