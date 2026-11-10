@@ -80,6 +80,8 @@ const TAG_BY_ID = {
   "reset-button": "button", "today-csv-button": "button",
   "history-csv-button": "button", "auto-calc-button": "button",
   "pro-disable-button": "button",
+  "weight-form": "form", "workout-form": "form", "plan-form": "form",
+  "plan-clear-button": "button", "backup-export-button": "button",
 };
 
 function makeDocument() {
@@ -644,6 +646,258 @@ function readProCode() {
     {
       byId(env2, "pro-disable-button").dispatch("click");
       check("Proをやめるとキーも消える", JSON.parse(storage.getItem(STORAGE_KEY)).license === null);
+    }
+  }
+
+  // ============ からだの記録・計画・スコア・バックアップ ============
+  console.log("[からだの記録]");
+  {
+    const flush = () => new Promise((r) => setTimeout(r, 30));
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const ago = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+    const later = (n) => ago(-n);
+    const today = ago(0);
+    const profile = { sex: "male", age: 30, height: 170, weight: 70, activity: 1.55, goal: "maintain" };
+    const saved = (st) => JSON.parse(st.getItem(STORAGE_KEY));
+    const preset = (obj) => { const st = makeLocalStorage(); st.setItem(STORAGE_KEY, JSON.stringify(Object.assign({ day: today, pro: true }, obj))); return st; };
+    const bmr = (w) => 10 * w + 6.25 * 170 - 5 * 30 + 5;
+
+    // 無料版では隠れている
+    {
+      const env = launch(makeLocalStorage());
+      check("無料版ではからだの記録が隠れている", byId(env, "body-area").classList.contains("hidden"));
+      check("無料版ではロックの説明が見える", !byId(env, "body-locked").classList.contains("hidden"));
+      check("無料版ではスコアが隠れている", byId(env, "score-area").classList.contains("hidden"));
+    }
+
+    // 体重の記録
+    {
+      const st = preset({});
+      const env = launch(st);
+      setVal(env, "weight-input", "65.43");
+      submit(env, "weight-form");
+      check("体重が今日の日付で保存される（0.1kg単位）", saved(st).weights[today] === 65.4);
+      check("体重の平均が表示される", text(env, "weight-trend").includes("65.4kg"));
+      check("体重の一覧に出る", byId(env, "weight-list").children.length === 1);
+      setVal(env, "weight-input", "500");
+      submit(env, "weight-form");
+      check("範囲外の体重は保存しない", saved(st).weights[today] === 65.4);
+      byId(env, "weight-list").children[0].children[1].click();
+      check("体重を削除できる", saved(st).weights[today] === undefined);
+    }
+
+    // 実績から逆算：14日間 2000kcal、体重は 1日 −0.05kg で減っている
+    {
+      const history = {}, weights = {};
+      for (let i = 1; i <= 14; i++) history[ago(i)] = { kcal: 2000, p: 100, f: 60, c: 250 };
+      for (let i = 0; i < 14; i++) weights[ago(i)] = Math.round((70 - 0.05 * (13 - i)) * 100) / 100;
+      const goalDate = later(100);
+      const st = preset({ profile, history, weights, plan: { goalWeight: 65, goalDate } });
+      const env = launch(st);
+      const last7 = [0, 1, 2, 3, 4, 5, 6].map((i) => weights[ago(i)]);
+      const avg7 = last7.reduce((a, b) => a + b, 0) / 7;
+      const tdee = 2000 + 0.05 * 7700;
+      const rate = (65 - avg7) / 100;
+      const expectKcal = Math.round(tdee + rate * 7700);
+      const t = saved(st).targets;
+      check("実績から逆算した目標が自動で入る（" + expectKcal + "kcal）", Math.abs(t.kcal - expectKcal) <= 1);
+      check("たんぱく質は体重×2g", t.p === Math.round(avg7 * 2));
+      check("逆算であることが表示される", text(env, "plan-result").includes("実績から逆算"));
+      check("TDEE 約2,385kcal と表示される", text(env, "plan-result").includes("2,385kcal"));
+      check("期限までの日数が出る", text(env, "plan-result").includes("あと100日"));
+      check("週あたりの傾きが表示される", text(env, "weight-trend").includes("−0.35kg"));
+      check("目標欄にも反映される", byId(env, "target-kcal").value === t.kcal);
+    }
+
+    // データが足りない間は式で推定
+    {
+      const st = preset({ profile, history: { [ago(1)]: { kcal: 1800, p: 90, f: 50, c: 200 } }, weights: { [today]: 70 },
+        plan: { goalWeight: 70, goalDate: later(30) } });
+      const env = launch(st);
+      check("データ不足なら式による推定と表示", text(env, "plan-result").includes("式による推定"));
+      check("推定は 基礎代謝×活動レベル", saved(st).targets.kcal === Math.round(bmr(70) * 1.55));
+    }
+
+    // 急な減量は上限で抑え、基礎代謝は下回らない
+    {
+      const st = preset({ profile, weights: { [today]: 70 }, plan: { goalWeight: 50, goalDate: later(10) } });
+      const env = launch(st);
+      const k = saved(st).targets.kcal;
+      check("急すぎる計画は抑えたと表示", text(env, "plan-result").includes("無理のない速さ"));
+      check("週1%の減量の上限で計算", k === Math.max(Math.round(bmr(70) * 1.55 - 70 * 0.01 / 7 * 7700), Math.round(bmr(70))));
+      check("目標は基礎代謝を下回らない", k >= Math.round(bmr(70)));
+    }
+
+    // プロフィールが無ければ案内を出す
+    {
+      const env = launch(preset({ weights: { [today]: 70 } }));
+      check("プロフィールが無ければ入力を案内する", text(env, "plan-result").includes("性別・年齢・身長"));
+    }
+
+    // 計画の設定と解除
+    {
+      const st = preset({ profile, weights: { [today]: 70 } });
+      const env = launch(st);
+      setVal(env, "plan-goal", "65"); setVal(env, "plan-date", ago(1));
+      submit(env, "plan-form");
+      check("過去の期限は受け付けない", saved(st).plan === null && text(env, "plan-message").includes("明日以降"));
+      setVal(env, "plan-date", later(60));
+      submit(env, "plan-form");
+      check("計画が保存される", saved(st).plan && saved(st).plan.goalWeight === 65);
+      byId(env, "plan-clear-button").click();
+      check("計画をやめられる", saved(st).plan === null);
+    }
+
+    // 筋トレ：前回との比較と自己ベスト
+    {
+      const st = preset({ workouts: { [ago(3)]: [{ id: "a", name: "ベンチプレス", kg: 55, reps: 10, sets: 3 }] } });
+      const env = launch(st);
+      setVal(env, "workout-name", " ベンチプレス "); setVal(env, "workout-kg", "60");
+      setVal(env, "workout-reps", "10"); setVal(env, "workout-sets", "3");
+      submit(env, "workout-form");
+      const items = saved(st).workouts[today];
+      check("筋トレが保存される（種目名の前後の空白は消す）", items.length === 1 && items[0].name === "ベンチプレス");
+      check("自己ベスト更新のお知らせが出る", text(env, "workout-message").includes("自己ベスト"));
+      const li = byId(env, "workout-list").children[0];
+      check("一覧に自己ベストの印が付く", li.textContent.includes("★"));
+      check("前回の記録が表示される", li.textContent.includes("前回") && li.textContent.includes("55"));
+      check("推定1RMが表示される（60×(1+10/30)=80）", li.textContent.includes("推定1RM 80.0kg"));
+      setVal(env, "workout-kg", "50");
+      submit(env, "workout-form");
+      check("前より軽ければ自己ベストにならない", !text(env, "workout-message").includes("自己ベスト"));
+      setVal(env, "workout-reps", "0");
+      submit(env, "workout-form");
+      check("回数0は記録しない", saved(st).workouts[today].length === 2);
+      check("種目の候補に出る", byId(env, "exercise-names").children.length === 1);
+      byId(env, "workout-list").children[1].children[1].click();
+      check("筋トレを削除できる", saved(st).workouts[today].length === 1);
+    }
+    {
+      const st = preset({});
+      const env = launch(st);
+      setVal(env, "workout-name", "スクワット"); setVal(env, "workout-kg", "80");
+      setVal(env, "workout-reps", "5"); setVal(env, "workout-sets", "5");
+      submit(env, "workout-form");
+      check("初めての種目は自己ベスト扱いにしない", !text(env, "workout-message").includes("自己ベスト"));
+    }
+
+    // スコアと連続記録
+    {
+      const st = preset({
+        targets: { kcal: 2000, p: 100, f: 60, c: 250 },
+        weights: { [today]: 70 },
+        workouts: { [today]: [{ id: "a", name: "懸垂", kg: 0, reps: 8, sets: 3 }] },
+        scores: { [ago(1)]: 80, [ago(2)]: 60, [ago(3)]: 55, [ago(5)]: 90, [ago(6)]: 90, [ago(7)]: 90, [ago(8)]: 90 },
+      });
+      const env = launch(st);
+      check("体重と筋トレで30点", text(env, "score-total") === "30");
+      check("内訳が5項目出る", byId(env, "score-items").children.length === 5);
+      check("今日が50点未満でも昨日までの連続3日", text(env, "score-streak") === "3");
+      check("自己ベストの連続は4日", text(env, "score-best") === "4");
+      check("累計は過去＋今日", text(env, "score-sum") === String(80 + 60 + 55 + 360 + 30));
+      setVal(env, "grams-input", "800");
+      submit(env, "add-form");
+      check("食事を足すとスコアが上がる", Number(text(env, "score-total")) >= 50);
+      check("50点を超えると今日も連続に入る", text(env, "score-streak") === "4");
+    }
+
+    // 日付が変わると前日のスコアが確定する
+    {
+      const st = makeLocalStorage();
+      st.setItem(STORAGE_KEY, JSON.stringify({ day: ago(1), pro: true, entries: [{ id: "e", foodId: "rice", grams: 100 }],
+        targets: { kcal: 2000, p: 100, f: 60, c: 250 }, weights: { [ago(1)]: 70 } }));
+      launch(st);
+      check("前日のスコアが保存される（食事20＋体重15）", saved(st).scores[ago(1)] === 35);
+    }
+
+    // バックアップの書き出しと読み込み
+    {
+      const st = preset({ weights: { [today]: 70 }, pendingSession: "cs_test_a1B2c3D4e5F6g7H8i9J0" });
+      const env = launch(st);
+      byId(env, "backup-export-button").click();
+      const backup = JSON.parse(lastDownloadText());
+      check("バックアップに体重が入る", backup.app === "pfc-calculator" && backup.data.weights[today] === 70);
+      check("バックアップに決済の保留番号は入らない", backup.data.pendingSession === undefined);
+
+      const st2 = makeLocalStorage();
+      const env2 = launch(st2);
+      const input = byId(env2, "backup-import");
+      input.files = [{ size: 100, text: async () => JSON.stringify(backup) }];
+      input.dispatch("change");
+      await flush();
+      check("読み込むと記録が戻る", saved(st2).weights[today] === 70);
+      check("読み込みのお知らせが出る", text(env2, "backup-message").includes("読み込みました"));
+
+      input.files = [{ size: 10, text: async () => "{broken" }];
+      input.dispatch("change");
+      await flush();
+      check("壊れたファイルは読み込まない", text(env2, "backup-message").includes("読み込めませんでした"));
+      check("壊れたファイルでも記録は消えない", saved(st2).weights[today] === 70);
+
+      input.files = [{ size: 100, text: async () => JSON.stringify({ app: "other", data: {} }) }];
+      input.dispatch("change");
+      await flush();
+      check("ほかのアプリのファイルは読み込まない", text(env2, "backup-message").includes("読み込めませんでした"));
+    }
+
+    // 読み込みで Pro・確認待ちを壊さない／改ざんしたバックアップで Pro にならない
+    {
+      const SID = "cs_test_a1B2c3D4e5F6g7H8i9J0";
+      const st = preset({ pendingSession: SID });
+      const env = launch(st);
+      const input = byId(env, "backup-import");
+      input.files = [{ size: 100, text: async () => JSON.stringify({ app: "pfc-calculator", version: 1,
+        data: { pro: false, license: null, weights: { [today]: 71 } } }) }];
+      input.dispatch("change");
+      await flush();
+      check("キーの無い古いバックアップでも今の Pro は消えない", saved(st).pro === true && saved(st).weights[today] === 71);
+      check("読み込んでも支払いの確認待ちは残る", saved(st).pendingSession === SID);
+
+      const st2 = makeLocalStorage();
+      const env2 = launch(st2);
+      const input2 = byId(env2, "backup-import");
+      input2.files = [{ size: 100, text: async () => JSON.stringify({ app: "pfc-calculator", version: 1,
+        data: { pro: true, day: later(5), entries: [{ id: "e", foodId: "rice", grams: 100 }] } }) }];
+      input2.dispatch("change");
+      await flush();
+      check("pro:true と書いただけのバックアップでは Pro にならない", saved(st2).pro === false);
+      check("未来の日付は今日に直す", saved(st2).day === today);
+      check("未来の日付の履歴を作らない", Object.keys(saved(st2).history).every((d) => d <= today));
+    }
+
+    // 計画があるあいだは目標を手で変えられない
+    {
+      const env = launch(preset({ profile, weights: { [today]: 70 }, plan: { goalWeight: 65, goalDate: later(60) } }));
+      check("計画中は目標の入力欄が使えない", byId(env, "target-kcal").disabled === true);
+      check("計画中はその理由を表示", !byId(env, "target-plan-note").classList.contains("hidden"));
+      const env2 = launch(preset({ profile }));
+      check("計画が無ければ目標を手で変えられる", byId(env2, "target-kcal").disabled === false);
+    }
+
+    // CSV に体重だけの日も出る
+    {
+      const env = launch(preset({ weights: { [ago(2)]: 70.5 } }));
+      byId(env, "history-csv-button").dispatch("click");
+      check("体重だけの日も履歴CSVに出る", lastDownloadText().includes(ago(2) + ",,,,,70.5"));
+    }
+
+    // 付け忘れの少ない日は逆算から除く
+    {
+      const history = {}, weights = {};
+      for (let i = 1; i <= 14; i++) history[ago(i)] = { kcal: i <= 3 ? 300 : 2000, p: 100, f: 60, c: 250 };
+      for (let i = 0; i < 14; i++) weights[ago(i)] = 70;
+      const env = launch(preset({ profile, history, weights, plan: { goalWeight: 70, goalDate: later(30) } }));
+      check("基礎代謝の半分に満たない日は除く（11日分で平均2,000kcal）",
+        text(env, "plan-result").includes("直近11日の平均摂取 2,000kcal"));
+    }
+
+    // 重なった id は付け直す
+    {
+      const st = preset({ workouts: { [today]: [
+        { id: "dup", name: "懸垂", kg: 0, reps: 8, sets: 3 }, { id: "dup", name: "懸垂", kg: 0, reps: 6, sets: 3 }] } });
+      const env = launch(st);
+      byId(env, "workout-list").children[0].children[1].click();
+      check("同じ id の記録があっても1件だけ消える", saved(st).workouts[today].length === 1);
     }
   }
   console.log("");

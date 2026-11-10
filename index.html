@@ -48,6 +48,24 @@
   </section>
 
   <!-- 食品を追加 -->
+  <!-- 今日のスコア（Pro） -->
+  <section class="card" aria-label="今日のスコア">
+    <h2>今日のスコア <span class="tag">Pro</span></h2>
+    <p id="score-locked" class="note">食事・目標の達成・体重・筋トレの記録でポイントがたまり、連続記録が伸びていくのは、Proの機能です。</p>
+    <div id="score-area" class="hidden">
+      <div class="score-head">
+        <div class="score-big"><span id="score-total">0</span><span class="score-unit">/ 100点</span></div>
+        <div class="score-side">
+          <div>連続 <strong id="score-streak">0</strong> 日</div>
+          <div>自己ベスト <strong id="score-best">0</strong> 日</div>
+          <div>累計 <strong id="score-sum">0</strong> 点</div>
+        </div>
+      </div>
+      <ul id="score-items" class="score-items"></ul>
+      <p class="note">50点以上の日が続くと「連続」が伸びます。スコアは日付が変わったときに、その日の記録と目標で確定します。</p>
+    </div>
+  </section>
+
   <section class="card" aria-label="食品を追加">
     <h2>食品を追加</h2>
     <form id="add-form">
@@ -87,6 +105,69 @@
       <p id="chart-empty" class="empty hidden">まだデータがありません。記録がたまると、ここにグラフが表示されます。</p>
       <p class="note">直近14日間のカロリー（kcal）の推移です。オレンジの点線は、1日の目標カロリーの位置を表します。</p>
       <button id="history-csv-button" class="btn-secondary" type="button">履歴をCSVで書き出す</button>
+    </div>
+  </section>
+
+  <!-- からだの記録（Pro） -->
+  <section class="card" aria-label="からだの記録">
+    <h2>からだの記録 <span class="tag">Pro</span></h2>
+    <p id="body-locked" class="note">毎日の体重と筋トレを記録し、食べた量と体重の推移から、あなたに必要なカロリーを自動で計算できるのは、Proの機能です。</p>
+    <div id="body-area" class="hidden">
+      <h3 class="subhead">今日の体重</h3>
+      <form id="weight-form" class="inline-form">
+        <label for="weight-input" class="visually-hidden">今日の体重（kg）</label>
+        <input id="weight-input" type="number" inputmode="decimal" min="20" max="300" step="0.1" placeholder="例：65.4">
+        <button type="submit" class="btn-primary btn-inline">記録する</button>
+      </form>
+      <p id="weight-trend" class="note"></p>
+      <ul id="weight-list" class="entries"></ul>
+
+      <h3 class="subhead">今日の筋トレ</h3>
+      <form id="workout-form">
+        <div class="form-row">
+          <div class="span-2">
+            <label for="workout-name">種目</label>
+            <input id="workout-name" type="text" list="exercise-names" maxlength="40" autocomplete="off" placeholder="例：ベンチプレス">
+            <datalist id="exercise-names"></datalist>
+          </div>
+          <div>
+            <label for="workout-kg">重量（kg）</label>
+            <input id="workout-kg" type="number" inputmode="decimal" min="0" max="1000" step="0.5" placeholder="例：60">
+          </div>
+          <div>
+            <label for="workout-reps">回数</label>
+            <input id="workout-reps" type="number" inputmode="numeric" min="1" max="1000" step="1" placeholder="例：10">
+          </div>
+          <div>
+            <label for="workout-sets">セット</label>
+            <input id="workout-sets" type="number" inputmode="numeric" min="1" max="100" step="1" value="3">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">筋トレを追加する</button>
+      </form>
+      <p id="workout-message" class="note" role="status"></p>
+      <p id="workout-empty" class="empty">今日の筋トレはまだありません。</p>
+      <ul id="workout-list" class="entries"></ul>
+      <p class="note">推定1RM（1回だけ持ち上げられる重さの目安）は Epley 式（重量×(1＋回数÷30)）で計算しています。</p>
+
+      <h3 class="subhead">目標体重と期限</h3>
+      <form id="plan-form">
+        <div class="form-row">
+          <div>
+            <label for="plan-goal">目標体重（kg）</label>
+            <input id="plan-goal" type="number" inputmode="decimal" min="20" max="300" step="0.1" placeholder="例：60">
+          </div>
+          <div>
+            <label for="plan-date">期限</label>
+            <input id="plan-date" type="date">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">この計画で目標を決める</button>
+        <button id="plan-clear-button" class="btn-secondary hidden" type="button">計画をやめる</button>
+      </form>
+      <p id="plan-message" class="note" role="status"></p>
+      <div id="plan-result" class="plan-result"></div>
+      <p class="note">計算の前提：1日の消費（TDEE）は、直近14日の平均摂取カロリーから、体重の増減の傾き×7,700kcal/kg を引いて逆算します。基礎代謝の半分に満たない日は、記録の付け忘れとみなして除きます。記録が足りない間は、基礎代謝（Mifflin-St Jeor 式）×活動レベルを使います。減量は体重の1%/週、増量は0.5%/週を上限にし、目標カロリーは基礎代謝を下回らないようにしています。PFC は、たんぱく質＝体重×2g、脂質＝目標カロリーの25%、炭水化物＝残りです。あくまで一般的な目安で、医療・栄養指導ではありません。</p>
     </div>
   </section>
 
@@ -144,6 +225,7 @@
         </div>
       </div>
       <p class="note">入力すると自動で保存されます。</p>
+      <p id="target-plan-note" class="note hidden">いまは「からだの記録」の計画から、目標が毎日自動で決まっています。手で決めたいときは、計画をやめてください。</p>
     </form>
 
     <h3 class="subhead">目標の自動計算 <span class="tag">Pro</span></h3>
@@ -193,6 +275,16 @@
     </div>
   </section>
 
+  <!-- バックアップ（無料） -->
+  <section class="card" aria-label="データのバックアップ">
+    <h2>データのバックアップ</h2>
+    <p class="note">記録はこの端末のブラウザの中にだけあります。機種変更やブラウザのデータ削除に備えて、ときどきバックアップを書き出しておくと安心です。</p>
+    <button id="backup-export-button" class="btn-secondary" type="button">バックアップを書き出す</button>
+    <label for="backup-import" class="file-label">バックアップを読み込む</label>
+    <input id="backup-import" type="file" accept="application/json,.json">
+    <p id="backup-message" class="note" role="status"></p>
+  </section>
+
   <!-- Pro -->
   <section class="card pro" aria-label="Proについて">
     <h2>PFC計算ツール Pro</h2>
@@ -202,6 +294,9 @@
         <li>過去14日間の記録をグラフでふり返る</li>
         <li>体重や目的から目標カロリー・PFCを自動計算</li>
         <li>自分の食品を200件まで登録できる</li>
+        <li>毎日の体重と筋トレ（種目・重量・回数・セット）を記録</li>
+        <li>目標体重と期限から、食べた量と体重の推移で必要カロリーを毎日自動で計算</li>
+        <li>今日のスコアと連続記録、筋トレの自己ベスト更新</li>
         <li>記録をCSVで書き出す</li>
       </ul>
       <div id="buy-area" class="buy hidden">
