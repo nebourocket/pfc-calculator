@@ -10,4 +10,4 @@ workers_dev = true
 ALLOWED_ORIGIN = "https://nebourocket.github.io"
 PRICE_JPY = "500"
 # Payment Link の ID (plink_...)。このリンク経由の支払いだけを認めます。空のあいだはキーを発行しません。
-PAYMENT_LINK_ID = "plink_1Ua82b3pzRAHYW7Jg8KFqp2g"
+PAYMENT_LINK_ID = "plink_1Ua96K40tHwHurdh6BhfYPsG"
