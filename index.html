@@ -29,6 +29,20 @@
 
 <main>
 <div class="panel" data-panel="today">
+  <!-- はじめての人向けの注意書き（閉じたら、この端末では出さない） -->
+  <section class="card notice hidden" id="welcome" aria-label="はじめに">
+    <h2>はじめに読んでください</h2>
+    <ul class="notice-list">
+      <li><strong>記録はこの端末のブラウザの中にだけ保存されます。</strong>サーバーには送らないので、機種を変えたりブラウザのデータを消したりすると、記録も消えます。ときどき「設定」の「データのバックアップ」で書き出しておいてください。</li>
+      <li><strong>Pro を買ったら、表示されるライセンスキーを控えてください。</strong>別のスマホやパソコンで Pro を使うときに入力します。</li>
+      <li><strong>チェーン店のメニューは、まだ入っていません。</strong>各社に掲載の許可をお願いしているところです。見つからない食品は「設定」の「自分の食品を登録する」で、パッケージの栄養成分表示から登録できます。</li>
+    </ul>
+    <div class="notice-actions">
+      <button id="welcome-close" class="btn-primary btn-inline" type="button">わかりました</button>
+      <button class="btn-secondary btn-inline" type="button" data-goto="settings">設定を開く</button>
+    </div>
+  </section>
+
   <!-- 今日の合計：お皿の図（外周＝目標までのカロリー、内側＝PFC のエネルギー比）と、食品の「栄養成分表示」の形の表 -->
   <section class="card sheet hero" id="summary" aria-label="今日の合計">
     <h2 class="hero-title">今日のお皿</h2>
@@ -122,6 +136,7 @@
     </div>
     <p class="note">食品データの出典：「<a href="https://www.mext.go.jp/a_menu/syokuhinseibun/mext_00001.html" target="_blank" rel="noopener">日本食品標準成分表（八訂）増補2023年</a>」（文部科学省）を加工して作成（全2,500品以上。プロテインのみ製品の目安値）。調理方法や銘柄により前後します。</p>
     <p class="note">市販品のデータは <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener">Open Food Facts</a> のものです（<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">Open Database License</a>）。誰でも編集できるデータのため、誤りが含まれることがあります。気になるときは、商品のパッケージの栄養成分表示を確かめてください。</p>
+    <p class="note">チェーン店のメニューは、各社から掲載の許可をいただけたものから追加していきます。</p>
   </section>
 
   <!-- 今日食べたもの -->
