@@ -25,6 +25,7 @@
   var MUSCLES = ["胸", "背中", "脚", "肩", "腕", "腹", "その他"];
   var MAX_SEARCH_RESULTS = 100;      // 食品の検索で一度に出す件数
   var MAX_RECENT = 12;               // 「最近食べたもの」に出す数
+  var MAX_SAVED_FOODS = 2000;        // 検索時に読む市販品のうち、記録・セットで使っている食品の写しの上限
   var MAX_MEAL_SETS = 30;            // 登録できるセットの数
   var MAX_SET_ITEMS = 30;            // 1つのセットに入れられる食品の数
 
@@ -51,6 +52,10 @@
   // 成分表（foods.js）と市販品（off-foods.js、Open Food Facts・ODbL）をまとめて使う。
   var FOODS = (Array.isArray(window.FOODS) ? window.FOODS : [])
     .concat(Array.isArray(window.OFF_FOODS) ? window.OFF_FOODS : []);
+  // 市販品の残り（off-foods-more.js、約2.4万品）は、検索したときだけ読み込んでここに足す。
+  // 起動を遅くしないため。読み込みの状態は idle → loading → done（失敗したら idle に戻す）。
+  var MORE_FOODS = [];
+  var moreFoodsState = "idle";
 
   // ---------- 小物 ----------
   var idCounter = 0;
@@ -160,6 +165,30 @@
       out.push({ id: f.id, name: f.name, kcal: kcal, p: p, f: fat, c: c });
     });
     return out;
+  }
+
+  // 検索時に読む市販品から記録した食品の写し。読み込む前に起動しても記録が消えないようにする。
+  function sanitizeSavedFoods(list) {
+    if (!Array.isArray(list)) return [];
+    var out = [];
+    var seen = {};
+    list.forEach(function (f) {
+      if (!f || typeof f !== "object") return;
+      if (typeof f.id !== "string" || !/^off:\d{6,14}$/.test(f.id) || seen[f.id]) return;
+      if (typeof f.name !== "string" || !f.name.trim()) return;
+      var kcal = finiteNumber(f.kcal);
+      var p = finiteNumber(f.p);
+      var fat = finiteNumber(f.f);
+      var c = finiteNumber(f.c);
+      if (kcal === null || p === null || fat === null || c === null) return;
+      if (kcal < 0 || kcal > 900 || p < 0 || p > 100 || fat < 0 || fat > 100 || c < 0 || c > 100) return;
+      seen[f.id] = true;
+      out.push({
+        id: f.id, name: f.name.slice(0, 130), category: "市販品",
+        kcal: kcal, p: p, f: fat, c: c, source: "Open Food Facts " + f.id.slice(4)
+      });
+    });
+    return out.slice(-MAX_SAVED_FOODS);
   }
 
   function sanitizeTargets(t) {
@@ -350,6 +379,7 @@
     return {
       entries: sanitizeEntries(parsed.entries),
       customFoods: sanitizeCustomFoods(parsed.customFoods),
+      savedFoods: sanitizeSavedFoods(parsed.savedFoods),
       targets: sanitizeTargets(parsed.targets),
       pro: parsed.pro === true,
       day: isDateString(parsed.day) ? parsed.day : todayString(),
@@ -369,7 +399,7 @@
 
   function loadState() {
     var fallback = {
-      entries: [], customFoods: [], targets: sanitizeTargets(null),
+      entries: [], customFoods: [], savedFoods: [], targets: sanitizeTargets(null),
       pro: false, day: todayString(), history: {}, profile: null,
       license: null, pendingSession: null,
       weights: {}, workouts: {}, plan: null, scores: {}, mealSets: [],
@@ -387,6 +417,7 @@
   }
 
   function saveState() {
+    syncSavedFoods();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -421,11 +452,73 @@
     for (var j = 0; j < FOODS.length; j++) {
       if (FOODS[j].id === id) return FOODS[j];
     }
+    for (var k = 0; k < MORE_FOODS.length; k++) {
+      if (MORE_FOODS[k].id === id) return MORE_FOODS[k];
+    }
+    for (var m = 0; m < state.savedFoods.length; m++) {
+      if (state.savedFoods[m].id === id) return state.savedFoods[m];
+    }
     return null;
   }
 
+  // 検索時に読む市販品のうち、今日の記録・最近食べたもの・セット・前日の記録で使っているものだけ、
+  // 数値を写して覚えておく（保存のたびに作り直すので、使わなくなったものは消える）。
+  var BASE_FOOD_IDS = null;
+  function syncSavedFoods() {
+    var ids = {};
+    var mark = function (x) { if (x && typeof x.foodId === "string") ids[x.foodId] = true; };
+    state.entries.forEach(mark);
+    state.recentFoods.forEach(mark);
+    state.mealSets.forEach(function (set) { set.items.forEach(mark); });
+    if (state.lastDay) state.lastDay.entries.forEach(mark);
+    if (!BASE_FOOD_IDS) {
+      BASE_FOOD_IDS = {};
+      FOODS.forEach(function (f) { BASE_FOOD_IDS[f.id] = true; });
+    }
+    var out = [];
+    Object.keys(ids).forEach(function (id) {
+      if (id.indexOf("off:") !== 0 || BASE_FOOD_IDS[id]) return;
+      var food = findFood(id);
+      if (food) out.push(food);
+    });
+    state.savedFoods = sanitizeSavedFoods(out);
+  }
+
+  // 市販品の残りを読み込む。script-src 'self' の範囲なので CSP は変えない。
+  // 一度読めば Service Worker が保存するので、次からはオフラインでも探せる。
+  function loadMoreFoods() {
+    if (moreFoodsState !== "idle" || !document.head) return;
+    moreFoodsState = "loading";
+    var script = document.createElement("script");
+    script.src = "off-foods-more.js";
+    script.onload = function () {
+      var rows = window.OFF_FOODS_MORE;
+      // 中身が読めなかった（オフラインで別のページが返った等）ときは、失敗として扱う。
+      if (!Array.isArray(rows)) { script.onerror(); return; }
+      MORE_FOODS = rows.filter(function (r) { return Array.isArray(r) && r.length === 6; })
+        .map(function (r) {
+          return {
+            id: "off:" + r[0], name: r[1], category: "市販品",
+            kcal: r[2], p: r[3], f: r[4], c: r[5], source: "Open Food Facts " + r[0]
+          };
+        });
+      window.OFF_FOODS_MORE = null;
+      moreFoodsState = "done";
+      renderSelect();
+    };
+    script.onerror = function () {
+      // 通信できなかったときは、次に検索したときにもう一度試す
+      // （この場で描き直すときに読み直さないよう、描き終えてから idle に戻す）。
+      if (script.parentNode) script.parentNode.removeChild(script);
+      moreFoodsState = "failed";
+      renderSelect();
+      moreFoodsState = "idle";
+    };
+    document.head.appendChild(script);
+  }
+
   function allFoodsForSelect() {
-    var list = FOODS.slice();
+    var list = FOODS.concat(MORE_FOODS);
     state.customFoods.forEach(function (food) {
       list.push({
         id: "custom:" + food.id,
@@ -1199,6 +1292,7 @@
     select.innerHTML = "";
     var words = els["food-search"]
       ? String(els["food-search"].value || "").split(/[\s\u3000]+/).map(normalizeForSearch).filter(Boolean) : [];
+    if (words.length) loadMoreFoods();
     // 何も探していないときは「よく使う食品」と自分の食品だけ。探したときは成分表の全食品から、
     // よく使う食品・自分の食品を先にして最大 MAX_SEARCH_RESULTS 件を出す。
     var all = allFoodsForSelect();
@@ -1214,7 +1308,12 @@
     }
     if (els["food-search-count"]) {
       els["food-search-count"].textContent = !words.length
-        ? "よく使う食品を表示しています。ほかの食品（成分表と市販品の全" + FOODS.length + "品）は、上の欄で探せます。"
+        ? "よく使う食品を表示しています。ほかの食品（成分表と市販品" +
+          (moreFoodsState === "done" ? "の全" + (FOODS.length + MORE_FOODS.length) + "品" : "") + "）は、上の欄で探せます。"
+        : moreFoodsState === "loading"
+          ? (foods.length ? total + "件見つかりました。" : "") + "市販品のデータを読み込んでいます…"
+        : moreFoodsState === "failed"
+          ? (foods.length ? total + "件見つかりました。" : "") + "市販品の一部を読み込めませんでした（通信を確かめて、もう一度探してください）。"
         : !foods.length
           ? "見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。"
           : total > MAX_SEARCH_RESULTS
@@ -2089,8 +2188,9 @@
         next.pendingSession = state.pendingSession;
         // 未来の日付の「今日」は受け付けない（端末の時計がずれていた場合など）。
         if (next.day > todayString()) { next.day = todayString(); }
-        next.entries = next.entries.filter(function (x) { return !!findFood(x.foodId); });
+        // 食品の参照は、読み込んだバックアップの savedFoods で確かめる（先に state を差し替える）。
         state = next;
+        state.entries = state.entries.filter(function (x) { return !!findFood(x.foodId); });
         rollOverIfNeeded();
         applyPlanTargets();
         saveState();
