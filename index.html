@@ -18,6 +18,11 @@
 <header class="header">
   <h1 class="brand"><span class="brand-mark" aria-hidden="true"><i class="dot-p"></i><i class="dot-f"></i><i class="dot-c"></i></span>PFCかんたん計算</h1>
   <p id="today-label" class="today-label"></p>
+  <div class="lang-switch" role="group" aria-label="Language / 言語" translate="no">
+    <button type="button" data-lang="ja" aria-pressed="true">日本語</button>
+    <button type="button" data-lang="en" aria-pressed="false">English</button>
+    <button type="button" data-lang="zh" aria-pressed="false">中文</button>
+  </div>
 </header>
 
 <nav class="tabs" aria-label="画面の切り替え">
@@ -118,7 +123,7 @@
   </section>
 
   <!-- 食品を追加 -->
-  <section class="card sheet" aria-label="食品を追加">
+  <section class="card sheet card-add" aria-label="食品を追加">
     <h2>食品を追加</h2>
     <form id="add-form">
       <label for="food-search">食品を探す</label>
@@ -260,8 +265,8 @@
             <label for="workout-muscle">部位</label>
             <select id="workout-muscle">
               <option value="">種目名から自動</option>
-              <option>胸</option><option>背中</option><option>脚</option><option>肩</option>
-              <option>腕</option><option>腹</option><option>その他</option>
+              <option value="胸">胸</option><option value="背中">背中</option><option value="脚">脚</option><option value="肩">肩</option>
+              <option value="腕">腕</option><option value="腹">腹</option><option value="その他">その他</option>
             </select>
           </div>
         </div>
@@ -477,6 +482,7 @@
 <script src="config.js"></script>
 <script src="foods.js"></script>
 <script src="off-foods.js"></script>
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

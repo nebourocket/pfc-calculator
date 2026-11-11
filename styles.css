@@ -64,6 +64,11 @@
   }
 }
 
+/* 手書き風フォント（Klee One）は日本語の文字だけに絞ってあり、簡体字が入っていない。中国語のときは端末のゴシックにする */
+:lang(zh-Hans) {
+  --hand: "Hiragino Sans GB", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -92,7 +97,8 @@ a { color: var(--brand); }
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 .brand {
@@ -113,6 +119,25 @@ a { color: var(--brand); }
 .dot-c { background: var(--c); }
 
 .today-label { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+/* 言語の切り替え（日本語・English・中文）。紺の枠線で、いまの言語だけ蛍光ペンを引く */
+.lang-switch { display: inline-flex; }
+.lang-switch button {
+  margin: 0 0 0 -1.5px;
+  padding: 2px 9px;
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.lang-switch button:first-child { margin-left: 0; border-radius: 6px 0 0 6px; }
+.lang-switch button:last-child { border-radius: 0 6px 6px 0; }
+.lang-switch button[aria-pressed="true"] { background: var(--marker); font-weight: 700; }
+.lang-switch button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; position: relative; }
 
 .tabs {
   position: fixed;
@@ -534,7 +559,7 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
   .panel[data-panel="body"] > .card { justify-self: center; width: 100%; max-width: 860px; }
   /* 今日のタブ：左に合計・食べたもの・スコア、右に「食品を追加」を固定して並べる */
   .panel[data-panel="today"] > .card { grid-column: 1; }
-  .panel[data-panel="today"] > [aria-label="食品を追加"] {
+  .panel[data-panel="today"] > .card-add {
     grid-column: 2;
     grid-row: 1 / span 3;
     position: sticky;
