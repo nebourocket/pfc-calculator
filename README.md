@@ -23,7 +23,7 @@
 
 - **30 秒で使える** — 食品を選んで量を入れて「追加する」。それだけで今日の合計が出ます。
 - **目標との差がひと目でわかる** — 1日の目標を入れると、カロリーと PFC ごとに達成率のバーが伸びます。
-- **市販品も 5,000 品** — コンビニやスーパーの商品を、Open Food Facts のオープンデータから収録。
+- **市販品も 29,283 品** — コンビニやスーパーの商品を、Open Food Facts のオープンデータから収録。よく使われる 5,000 品は最初から、残りは検索したときに読み込むので、起動は軽いまま。
 - **公式の成分表を全部収録** — 文部科学省「日本食品標準成分表（八訂）増補2023年」の **2,500品以上** をすべて収録。ひらがなでもカタカナでも、「ごはん」「とりむね」のようなふだんの言い方でも探せます。
 - **記録は外に出ない** — 保存先はブラウザの localStorage だけ。サーバーに記録を送る仕組みそのものがありません。
 - **軽い・速い** — HTML・CSS・JavaScript だけ。外部ライブラリも広告も解析タグもありません。
@@ -154,13 +154,13 @@ noteメンバーシップ「[寝坊ロケットの創作室](https://note.com/ne
 
 ### 市販品（Open Food Facts）
 
-コンビニやスーパーで売られている市販品 **5,000品** は、[Open Food Facts](https://world.openfoodfacts.org/) のデータです。
+コンビニやスーパーで売られている市販品 **29,283品** は、[Open Food Facts](https://world.openfoodfacts.org/) のデータです。
 
 Contains data from Open Food Facts, available under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). 個々の内容は [Database Contents License (DbCL) 1.0](https://opendatacommons.org/licenses/dbcl/1-0/) です。
 
 - 公式のデータファイルから `tools/build_off_foods.py` で取り出しています（API をたくさん呼び出すことはしていません）。
-- 取り出す条件：日本で売られている・商品名に日本語がある・100g あたりの4項目がそろっている・カロリーが P×4＋F×9＋C×4 から 25% 以上ずれていない。重なりを除き、スキャン数の多い順に 5,000 品。
-- 取り出した `off-foods.js` は ODbL で公開しています（自由に使えますが、使うときは同じ ODbL で公開してください）。成分表のデータ（`foods.js`）やアプリのコードとは別のファイルで、ODbL はこのファイルだけにかかります。
+- 取り出す条件：日本で売られている・商品名に日本語がある・100g あたりの4項目がそろっている・カロリーが P×4＋F×9＋C×4 から 25% 以上ずれていない。重なりを除いた 29,283 品を、スキャン数の多い順に並べる。上位 5,000 品は `off-foods.js`（起動時に読む）、残り 24,283 品は `off-foods-more.js`（検索したときだけ読む）。
+- 取り出した `off-foods.js` と `off-foods-more.js` は ODbL で公開しています（自由に使えますが、使うときは同じ ODbL で公開してください）。成分表のデータ（`foods.js`）やアプリのコードとは別のファイルで、ODbL はこの2つのファイルだけにかかります。
 - 誰でも編集できるデータのため、誤りが含まれることがあります（1袋あたりの値が 100g あたりとして入っている、など）。気になるときは、商品のパッケージの栄養成分表示を確かめてください。
 - 調理方法や銘柄により前後します。
 - プロテインだけは成分表に無く、製品による差が大きいため、代表的なホエイプロテインの目安値です。
@@ -188,7 +188,7 @@ node worker/test/license.test.mjs # ライセンス発行 Worker（Stripe への
 - `index.html` / `styles.css` / `app.js` / `foods.js` — アプリ本体
 - `manifest.webmanifest` / `sw.js` / `icons/` — ホーム画面に追加するための設定・オフライン対応・アイコン（アイコンは Python で描いたもの）
 - `tools/build_foods.py` — 成分表の Excel から `foods.js` を作るスクリプト（`python3 -I tools/build_foods.py <Excel> foods.js`）
-- `tools/build_off_foods.py` / `off-foods.js` — Open Food Facts のデータファイルから市販品を取り出すスクリプトと、その結果（ODbL）
+- `tools/build_off_foods.py` / `off-foods.js` / `off-foods-more.js` — Open Food Facts のデータファイルから市販品を取り出すスクリプトと、その結果（ODbL）
 - `config.js` — 公開してよい設定（Payment Link の URL・Worker の URL・公開鍵）
 - `legal.html` — 特定商取引法に基づく表記
 - `worker/` — ライセンス発行 Worker（Cloudflare Workers）

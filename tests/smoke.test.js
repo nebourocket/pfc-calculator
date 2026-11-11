@@ -10,6 +10,7 @@ const vm = require("vm");
 const ROOT = path.join(__dirname, "..");
 const foodsCode = fs.readFileSync(path.join(ROOT, "foods.js"), "utf8");
 const offFoodsCode = fs.readFileSync(path.join(ROOT, "off-foods.js"), "utf8");
+const offMoreCode = fs.readFileSync(path.join(ROOT, "off-foods-more.js"), "utf8");
 const appCode = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 
 // ---------- 簡易DOMスタブ ----------
@@ -43,6 +44,7 @@ class El {
   }
   set innerHTML(v) { if (v === "" || v == null) { this.children = []; this._text = ""; } else { this._text = String(v); } }
   get innerHTML() { return this._text; }
+  get parentNode() { return this.parent; }
   appendChild(ch) { this.children.push(ch); ch.parent = this; return ch; }
   setAttribute(k, v) { (this.attrs = this.attrs || {})[k] = String(v); }
   removeChild(ch) {
@@ -91,6 +93,7 @@ function makeDocument() {
   return {
     registry,
     body: new El("body"),
+    head: new El("head"),
     getElementById(id) {
       if (!registry[id]) {
         const el = new El(TAG_BY_ID[id] || "div");
@@ -161,7 +164,7 @@ function launch(storage, opts) {
   vm.runInContext(foodsCode, sandbox);
   vm.runInContext(offFoodsCode, sandbox);
   vm.runInContext(appCode, sandbox);
-  return { document: documentStub, storage, replaced };
+  return { document: documentStub, storage, replaced, sandbox };
 }
 
 // ---------- テストユーティリティ ----------
@@ -708,9 +711,14 @@ function readProCode() {
   {
     const optionValues = (env) => { const out = []; const walk = (el) => el.children.forEach((c) => { if (c.tagName === "OPTION") out.push(c._value); walk(c); }); walk(byId(env, "food-select")); return out; };
     const env = launch(makeLocalStorage());
-    const search = (q) => { const el = byId(env, "food-search"); el.value = q; el.dispatch("input"); };
+    // 検索すると読みにいく追加データは、すぐ読み込めたことにする。
+    const search = (q) => {
+      const el = byId(env, "food-search"); el.value = q; el.dispatch("input");
+      const sc = env.document.head.children[0];
+      if (sc && !sc._done) { sc._done = true; vm.runInContext(offMoreCode, env.sandbox); sc.onload(); }
+    };
     check("何も探していないときは、よく使う食品だけ並ぶ", optionValues(env).length < 120 && optionValues(env).includes("rice"));
-    check("何も探していないときは、全品を探せると案内", text(env, "food-search-count").includes("全"));
+    check("何も探していないときは、ほかの食品を探せると案内", text(env, "food-search-count").includes("上の欄で探せます"));
     search("ヨーグルト");
     check("カタカナで探せる（よく使う食品が先）", optionValues(env)[0].startsWith("yogurt") && optionValues(env).length >= 3);
     search("よーぐると");
@@ -734,6 +742,13 @@ function readProCode() {
       check("市販品も探せる（" + sample.name + "）", optionValues(env).includes(sample.id));
       const ids = new Set(w.OFF_FOODS.map((f) => f.id));
       check("市販品の id は重ならない", ids.size === w.OFF_FOODS.length);
+      const more = []; { const m = {}; new Function("window", offMoreCode)(m); more.push(...m.OFF_FOODS_MORE); }
+      check("追加データの id は既存の市販品とも重ならない", more.every((r) => !ids.has("off:" + r[0])) &&
+        new Set(more.map((r) => r[0])).size === more.length);
+      check("追加データも kcal と PFC が整合している", more.every((r) => Math.abs(r[2] - (r[3] * 4 + r[4] * 9 + r[5] * 4)) <= Math.max(25.5, r[2] * 0.25 + 0.5)));
+      search("");
+      const shown = parseInt((text(env, "food-search-count").match(/全(\d+)品/) || [])[1], 10);
+      check("読み込み後は全品の件数を案内（成分表＋市販品＋追加データ）", shown > w.OFF_FOODS.length + more.length);
       check("市販品は kcal と PFC が整合している", w.OFF_FOODS.every((f) => Math.abs(f.kcal - (f.p * 4 + f.f * 9 + f.c * 4)) <= Math.max(25.5, f.kcal * 0.25 + 0.5)));
     }
     search("");
@@ -1136,6 +1151,96 @@ function readProCode() {
       const none = launch(makeLocalStorage());
       check("パラメータが無ければ URL を触らない", none.replaced.length === 0);
     }
+  }
+;
+
+  // ============ 市販品の残り（検索したときだけ読み込む） ============
+  console.log("[市販品の追加データ]");
+  {
+    const st = makeLocalStorage();
+    const env = launch(st);
+    const head = env.document.head;
+    check("起動しただけでは追加データを読み込まない", head.children.length === 0);
+    const row = env.sandbox.window.OFF_FOODS_MORE;
+    check("起動時には OFF_FOODS_MORE が無い", row === undefined);
+    // 追加データの先頭の商品をバーコードで探す
+    const firstRow = JSON.parse(offMoreCode.split("\n").find((l) => l.startsWith("[\"")).replace(/,$/, ""));
+    const code = firstRow[0];
+    change(env, "food-search", code);
+    byId(env, "food-search").dispatch("input");
+    check("検索すると off-foods-more.js を読み込みにいく", head.children.length === 1 && head.children[0].src === "off-foods-more.js");
+    check("読み込み中と表示する", /読み込んでいます/.test(text(env, "food-search-count")));
+    byId(env, "food-search").dispatch("input");
+    check("読み込み中に何度検索しても1回だけ読む", head.children.length === 1);
+    vm.runInContext(offMoreCode, env.sandbox);
+    head.children[0].onload();
+    check("読み込み後に追加データの商品が見つかる", byId(env, "food-select").value === "off:" + code);
+    check("読み込み後は件数を出す", /1件見つかりました/.test(text(env, "food-search-count")));
+    setVal(env, "grams-input", "100");
+    submit(env, "add-form");
+    check("追加データの商品を記録できる", approx(num(env, "total-kcal"), firstRow[2], 0.6));
+    const data = JSON.parse(st.getItem(STORAGE_KEY));
+    check("記録した商品の数値を savedFoods に写す", data.savedFoods.length === 1 && data.savedFoods[0].id === "off:" + code);
+    // 読み込む前の再起動でも記録が残る
+    const again = launch(st);
+    check("再起動後（追加データ未読み込み）も記録が残る", byId(again, "entry-list").children.length === 1 &&
+      approx(num(again, "total-kcal"), firstRow[2], 0.6));
+    // 壊れた savedFoods は捨てる
+    const bad = makeLocalStorage();
+    bad.setItem(STORAGE_KEY, JSON.stringify({ savedFoods: [
+      { id: "custom:x", name: "a", kcal: 1, p: 1, f: 1, c: 1 },
+      { id: "off:123456", name: "", kcal: 1, p: 1, f: 1, c: 1 },
+      { id: "off:1234567", name: "ok", kcal: 9999, p: 1, f: 1, c: 1 },
+      { id: "off:12345678", name: "good", kcal: 100, p: 1, f: 2, c: 3 },
+      { id: "off:87654321", name: "unused", kcal: 100, p: 1, f: 2, c: 3 }],
+      entries: ["custom:x", "off:123456", "off:1234567", "off:12345678"].map((id, i) => ({ id: "e" + i, foodId: id, grams: 100 })) }));
+    launch(bad);
+    const kept = JSON.parse(bad.getItem(STORAGE_KEY)).savedFoods;
+    check("savedFoods は正しい形で、使っているものだけ残す", kept.length === 1 && kept[0].id === "off:12345678");
+
+    // セットに入れた追加データの食品も、読み込む前の再起動で消えない
+    {
+      const st3 = makeLocalStorage();
+      st3.setItem(STORAGE_KEY, JSON.stringify({ pro: true,
+        savedFoods: [{ id: "off:" + code, name: firstRow[1], kcal: firstRow[2], p: firstRow[3], f: firstRow[4], c: firstRow[5] }],
+        mealSets: [{ id: "s1", name: "朝", items: [{ foodId: "off:" + code, grams: 50 }] }] }));
+      launch(st3);
+      const d3 = JSON.parse(st3.getItem(STORAGE_KEY));
+      check("セットだけで使っている食品の写しも残る", d3.savedFoods.length === 1 && d3.mealSets[0].items.length === 1);
+    }
+
+    // 別の端末でバックアップを読み込んでも、追加データの食品の記録が残る（追加データは未読み込み）
+    {
+      byId(again, "backup-export-button").click();
+      const backup = JSON.parse(lastDownloadText());
+      const st4 = makeLocalStorage();
+      const env4 = launch(st4);
+      const input = byId(env4, "backup-import");
+      input.files = [{ size: 100, text: async () => JSON.stringify(backup) }];
+      input.dispatch("change");
+      await flush();
+      check("バックアップの読み込みで追加データの食品の記録が残る",
+        JSON.parse(st4.getItem(STORAGE_KEY)).entries.length === 1 && approx(num(env4, "total-kcal"), firstRow[2], 0.6));
+    }
+
+    // 中身が配列でない（オフラインで別のページが返った等）ときは失敗として扱う
+    {
+      const env5 = launch(makeLocalStorage());
+      change(env5, "food-search", "zzz");
+      byId(env5, "food-search").dispatch("input");
+      env5.document.head.children[0].onload();
+      check("中身が読めなければ失敗の案内を出す", /読み込めませんでした/.test(text(env5, "food-search-count")) &&
+        env5.document.head.children.length === 0);
+    }
+    // 読み込みに失敗したら、次の検索でもう一度試す
+    const env2 = launch(makeLocalStorage());
+    change(env2, "food-search", "zzz");
+    byId(env2, "food-search").dispatch("input");
+    const s1 = env2.document.head.children[0];
+    s1.onerror();
+    check("失敗したら script を外し、その場で読み直さない", env2.document.head.children.length === 0);
+    byId(env2, "food-search").dispatch("input");
+    check("次の検索でもう一度読みにいく", env2.document.head.children.length === 1);
   }
   console.log("");
   console.log("結果: " + passed + " passed, " + failed + " failed");
