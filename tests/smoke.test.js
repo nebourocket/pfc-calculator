@@ -656,22 +656,25 @@ function readProCode() {
     }
   }
 
-  // ============ 今日の皿（積み上げバー） ============
+  // ============ 今日のお皿（円の図） ============
   console.log("[今日の皿]");
   {
     const st = makeLocalStorage();
     st.setItem(STORAGE_KEY, JSON.stringify({ targets: { kcal: 2000, p: 100, f: 60, c: 250 }, entries: [{ id: "a", foodId: "chicken-breast", grams: 200 }] }));
     const env = launch(st);
-    const w = (id) => parseFloat(byId(env, id).style.width);
-    // 鶏むね 200g：P 46.6g×4＝186.4、F 3.8g×9＝34.2、C 0.2g×4＝0.8（目標 2,000kcal が全体の幅）
-    check("たんぱく質の幅は 186.4/2000", Math.abs(w("plate-p") - 9.32) < 0.01);
-    check("脂質の幅は 34.2/2000", Math.abs(w("plate-f") - 1.71) < 0.01);
-    check("目標の線は右端（まだ目標未満）", byId(env, "plate-target").style.left === "100.00%");
+    const arc = (id) => parseFloat(byId(env, id).attrs["stroke-dasharray"]);
+    // 鶏むね 200g：P 46.6g×4＝186.4、F 3.8g×9＝34.2、C 0.2g×4＝0.8 → 合計 221.4kcal のうちの割合
+    check("たんぱく質の割合は 186.4/221.4", text(env, "share-p") === String(Math.round(186.4 / 221.4 * 100)));
+    check("脂質の割合は 34.2/221.4", text(env, "share-f") === String(Math.round(34.2 / 221.4 * 100)));
+    check("P の弧は割合からすき間を引いた長さ", Math.abs(arc("plate-p") - (186.4 / 221.4 * 100 - 1)) < 0.01);
+    check("F の弧は P のあとから始まる", Math.abs(parseFloat(byId(env, "plate-f").attrs["stroke-dashoffset"]) + 186.4 / 221.4 * 100) < 0.01);
+    check("外周は目標までの割合", Math.abs(arc("plate-rim") - byId(env, "nf-kcal").textContent.replace(/,/g, "") / 2000 * 100) < 0.01);
+    check("目標未満なら朱の輪は無し", arc("plate-over") === 0);
     check("残りのカロリーを表示", text(env, "remaining-kcal") === "あと 1,790 kcal");
     setVal(env, "food-select", "rice"); setVal(env, "grams-input", "1300");
     submit(env, "add-form");
     check("目標を超えるとオーバーと表示", text(env, "remaining-kcal").includes("オーバー") && byId(env, "remaining-kcal").classList.contains("is-over"));
-    check("超えたら目標の線は左に寄る", parseFloat(byId(env, "plate-target").style.left) < 100);
+    check("超えたら外周は1周、超えた分を朱の輪で描く", arc("plate-rim") === 100 && arc("plate-over") > 0);
   }
 
   // ============ 最近食べたもの・前日と同じもの（無料） ============
@@ -1344,7 +1347,7 @@ function readProCode() {
       const env = launch(preset({ targets, history: hist }));
       const days = byId(env, "week-days").children;
       check("日ごとの印は7日分", days.length === 7);
-      check("目標内の日は塗りつぶし", days[5].className.includes("hit") && days[4].className.includes("logged") && !days[4].className.includes("hit"));
+      check("目標内の日は◎、記録した日は○", days[5].className.includes("hit") && days[4].className.includes("logged") && !days[4].className.includes("hit"));
       check("今日の印に「今日」", days[6].className.includes("today") && days[6].textContent.includes("今日"));
       const stats = byId(env, "week-stats").children.map((c) => c.textContent);
       check("記録した日は2/7、前の週より+1日", stats[0].includes("2/ 7日") && stats[0].includes("前の週 +1日"));
