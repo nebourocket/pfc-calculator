@@ -530,3 +530,113 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
 .label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .label-row label { margin-top: 0; }
 .find-link { font-size: 0.82rem; font-weight: 700; color: var(--brand); }
+
+/* ---------- 今日のチェック・連続記録・お祝い（また開きたくなる仕掛け） ---------- */
+.checkin { position: relative; overflow: hidden; }
+.checkin-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.checkin-head h2 { margin-bottom: 10px; }
+.streak { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; font-weight: 700; color: var(--ink-2); }
+.streak strong { font-size: 1.15rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* 3色の点を重ねた小さな印（ヘッダーのロゴと同じ三色） */
+.streak-mark { width: 12px; height: 12px; border-radius: 50%; background: var(--line); flex-shrink: 0; }
+.streak.is-on .streak-mark { background: conic-gradient(var(--p) 0 33%, var(--f) 0 66%, var(--c) 0); }
+
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.check {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  padding: 7px 14px 7px 8px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 0.9rem; color: var(--ink-2);
+}
+.check-tick {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--line); background: var(--surface);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.check.done { background: var(--brand-soft); border-color: transparent; color: var(--ink); font-weight: 700; }
+.check.done .check-tick { background: var(--brand); border-color: var(--brand); }
+/* チェックの印（L字を回転させる） */
+.check.done .check-tick::after {
+  content: ""; width: 5px; height: 10px; margin-top: -2px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.check-next-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.check-next { margin: 0; flex: 1; font-size: 0.92rem; color: var(--ink); }
+.check-next strong { font-variant-numeric: tabular-nums; }
+
+.celebrate {
+  position: relative; margin-top: 14px; padding: 16px 16px 14px; border-radius: 12px;
+  background: var(--brand); color: #fff; text-align: center;
+  animation: pop-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.celebrate-title { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.04em; }
+.celebrate-sub { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.92; }
+.confetti { position: absolute; inset: 0; pointer-events: none; }
+.confetti i {
+  position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; border-radius: 2px;
+  background: var(--c); opacity: 0;
+  animation: burst 900ms ease-out forwards;
+}
+.confetti i:nth-child(3n+1) { background: var(--p); }
+.confetti i:nth-child(3n+2) { background: #fff; }
+.confetti i:nth-child(1)  { --dx: -140px; --dy: -46px; }
+.confetti i:nth-child(2)  { --dx: -110px; --dy: 30px; }
+.confetti i:nth-child(3)  { --dx: -80px;  --dy: -60px; }
+.confetti i:nth-child(4)  { --dx: -48px;  --dy: 40px; }
+.confetti i:nth-child(5)  { --dx: -20px;  --dy: -56px; }
+.confetti i:nth-child(6)  { --dx: 10px;   --dy: 46px; }
+.confetti i:nth-child(7)  { --dx: 34px;   --dy: -62px; }
+.confetti i:nth-child(8)  { --dx: 62px;   --dy: 36px; }
+.confetti i:nth-child(9)  { --dx: 90px;   --dy: -48px; }
+.confetti i:nth-child(10) { --dx: 118px;  --dy: 26px; }
+.confetti i:nth-child(11) { --dx: 140px;  --dy: -30px; }
+.confetti i:nth-child(12) { --dx: -150px; --dy: 4px; }
+@keyframes burst {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.6) rotate(0); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(200deg); }
+}
+@keyframes pop-in {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- 週のふり返り ---------- */
+.week-range { margin: 0 0 8px; font-size: 0.84rem; color: var(--muted); }
+.week-days { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; }
+.week-day { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 日ごとの印：記録なし＝点線の丸、記録あり＝緑の輪、目標内＝緑の塗り＋チェック。色だけに頼らず形でも分ける */
+.week-dot {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; margin: 0 auto 4px; border-radius: 50%;
+  border: 2px dashed var(--line); background: transparent;
+}
+.week-day.logged .week-dot { border: 3px solid var(--brand); }
+.week-day.hit .week-dot { border: 3px solid var(--brand); background: var(--brand); }
+.week-day.hit .week-dot::after {
+  content: ""; width: 6px; height: 11px; margin-top: -3px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.week-day.today .week-label { color: var(--ink); font-weight: 800; }
+.week-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.stat { padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.stat-label { margin: 0; font-size: 0.78rem; color: var(--muted); font-weight: 700; }
+.stat-value { margin: 2px 0 0; font-size: 1.4rem; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.stat-value small { font-size: 0.8rem; font-weight: 700; color: var(--ink-2); margin-left: 3px; }
+.stat-delta { margin: 1px 0 0; font-size: 0.78rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+@media (min-width: 600px) { .week-stats { grid-template-columns: repeat(4, 1fr); } }
+
+/* ---------- お知らせ（トースト） ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 30;
+  transform: translateX(-50%); max-width: calc(100% - 32px);
+  padding: 12px 18px; border-radius: 999px;
+  background: var(--ink); color: var(--surface); font-size: 0.92rem; font-weight: 700;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  animation: pop-in 260ms ease-out;
+}
+@media (min-width: 900px) { .toast { bottom: 28px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate, .toast { animation: none; }
+  .confetti { display: none; }
+}

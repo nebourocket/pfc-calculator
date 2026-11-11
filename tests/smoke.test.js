@@ -155,7 +155,7 @@ function launch(storage, opts) {
     console,
     Blob: FakeBlob,
     URL: FakeURL,
-    setTimeout,
+    setTimeout, clearTimeout,
     crypto: globalThis.crypto,
     TextEncoder, TextDecoder, atob, URLSearchParams,
     fetch: opts.fetch,
@@ -1242,6 +1242,119 @@ function readProCode() {
     byId(env2, "food-search").dispatch("input");
     check("次の検索でもう一度読みにいく", env2.document.head.children.length === 1);
   }
+
+  // ============ また開きたくなる仕掛け（無料） ============
+  console.log("[今日のチェック・連続記録・お祝い・週のふり返り]");
+  {
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const ago = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+    const today = ago(0);
+    const preset = (obj) => { const st = makeLocalStorage(); st.setItem(STORAGE_KEY, JSON.stringify(Object.assign({ day: today }, obj))); return st; };
+    const w = {}; new Function("window", foodsCode)(w);
+    const rice = w.FOODS.find((f) => f.id === "rice");
+    const chicken = w.FOODS.find((f) => f.id === "chicken-breast");
+    const doneCount = (env) => byId(env, "check-list").children.filter((li) => li.className.includes("done")).length;
+
+    // はじめて開いたとき
+    {
+      const env = launch(makeLocalStorage());
+      check("今日のチェックは5項目", byId(env, "check-list").children.length === 5 && doneCount(env) === 0);
+      check("最初は記録をすすめる", text(env, "check-next").includes("まずは"));
+      check("連続0日なら「始めよう」", text(env, "streak-text").includes("始めよう"));
+      check("起動しただけではお知らせを出さない", byId(env, "toast").classList.contains("hidden"));
+    }
+
+    // 昨日・おとといを記録済み → 今日の記録で3日連続（自己ベスト更新）
+    {
+      const hist = { [ago(1)]: { kcal: 1800, p: 80, f: 50, c: 200 }, [ago(2)]: { kcal: 1900, p: 90, f: 55, c: 210 } };
+      const st = preset({ history: hist });
+      const env = launch(st);
+      check("今日まだなら昨日までの連続を出す", text(env, "streak-text").includes("2日連続で記録中"));
+      setVal(env, "grams-input", "100");
+      submit(env, "add-form");
+      check("今日の記録で3日連続になる", text(env, "streak-text").startsWith("3日連続で記録"));
+      check("自己ベスト更新を知らせる", !byId(env, "toast").classList.contains("hidden") && text(env, "toast").includes("自己ベスト更新：3日"));
+      check("食事の記録にチェックが付く", doneCount(env) >= 1);
+      // 前にもっと長い連続があれば「更新」とは言わない
+      const hist2 = Object.assign({}, hist);
+      for (let i = 4; i <= 8; i++) hist2[ago(i)] = { kcal: 1500, p: 70, f: 40, c: 180 };
+      const env2 = launch(preset({ history: hist2 }));
+      setVal(env2, "grams-input", "100");
+      submit(env2, "add-form");
+      check("自己ベストに届かなければ連続日数だけ知らせる", text(env2, "toast") === "3日連続で記録しています");
+      // 消して記録し直しても、同じ日にもう一度は知らせない
+      byId(env2, "toast").classList.add("hidden");
+      byId(env2, "reset-button").click();
+      submit(env2, "add-form");
+      check("連続のお知らせは1日1回", byId(env2, "toast").classList.contains("hidden"));
+    }
+
+    // 目標を満たした瞬間だけ、1日1回お祝い
+    {
+      const targets = { kcal: rice.kcal * 1.5, p: rice.p * 1.5, f: 50, c: 200 };
+      const st = preset({ targets });
+      const env = launch(st);
+      check("目標前はお祝いを出さない", byId(env, "celebrate").classList.contains("hidden"));
+      setVal(env, "grams-input", "150");
+      submit(env, "add-form");
+      check("目標を満たすとお祝いを出す", !byId(env, "celebrate").classList.contains("hidden"));
+      check("お祝いした日を覚える", JSON.parse(st.getItem(STORAGE_KEY)).celebrated === today);
+      const again = launch(st);
+      check("開き直しただけではお祝いを出さない", byId(again, "celebrate").classList.contains("hidden"));
+      check("達成したら体重の記録を案内し、からだへのボタンを出す", text(again, "check-next").includes("体重") &&
+        !byId(again, "check-go").classList.contains("hidden"));
+      // 目標を外れてまた満たしても、同じ日は2回目を出さない
+      byId(again, "reset-button").click();
+      setVal(again, "grams-input", "150");
+      submit(again, "add-form");
+      check("同じ日のお祝いは1回だけ", byId(again, "celebrate").classList.contains("hidden"));
+    }
+
+    // 目標の値を変えただけで満たしても、お祝いは出さない（その日の1回も使わない）
+    {
+      const st = preset({ targets: { kcal: 2000, p: rice.p * 1.5, f: 50, c: 200 } });
+      const env = launch(st);
+      setVal(env, "grams-input", "150");
+      submit(env, "add-form");
+      check("カロリーが足りない間はお祝いなし", byId(env, "celebrate").classList.contains("hidden"));
+      change(env, "target-kcal", String(rice.kcal * 1.5));
+      check("目標を下げて満たしてもお祝いは出ない", byId(env, "celebrate").classList.contains("hidden") &&
+        JSON.parse(st.getItem(STORAGE_KEY)).celebrated == null);
+    }
+
+    // たんぱく質が足りないときは、鶏むね肉で何gかを案内
+    {
+      const env = launch(preset({ targets: { kcal: 2000, p: 100, f: 60, c: 250 } }));
+      setVal(env, "grams-input", "100");
+      submit(env, "add-form");
+      const need = 100 * 0.9 - rice.p;
+      const g = Math.ceil(need / chicken.p * 100 / 10) * 10;
+      check("たんぱく質の不足と鶏むね肉の量を出す（" + g + "g）", text(env, "check-next").includes("たんぱく質があと " + Math.ceil(need) + "g") &&
+        text(env, "check-next").includes("鶏むね肉なら約" + g + "g"));
+    }
+
+    // 週のふり返り
+    {
+      const targets = { kcal: 2000, p: 100, f: 60, c: 250 };
+      const hist = {
+        [ago(1)]: { kcal: 2000, p: 100, f: 60, c: 250 },   // 目標内
+        [ago(2)]: { kcal: 2600, p: 100, f: 80, c: 300 },   // 記録のみ
+        [ago(9)]: { kcal: 1500, p: 60, f: 40, c: 200 },    // 前の週
+      };
+      const env = launch(preset({ targets, history: hist }));
+      const days = byId(env, "week-days").children;
+      check("日ごとの印は7日分", days.length === 7);
+      check("目標内の日は塗りつぶし", days[5].className.includes("hit") && days[4].className.includes("logged") && !days[4].className.includes("hit"));
+      check("今日の印に「今日」", days[6].className.includes("today") && days[6].textContent.includes("今日"));
+      const stats = byId(env, "week-stats").children.map((c) => c.textContent);
+      check("記録した日は2/7、前の週より+1日", stats[0].includes("2/ 7日") && stats[0].includes("前の週 +1日"));
+      check("目標内の日は1日", stats[1].startsWith("目標内の日1日"));
+      check("平均カロリーは記録した日だけで2,300kcal、前の週より+800", stats[2].includes("2,300kcal") && stats[2].includes("+800kcal"));
+      const empty = launch(makeLocalStorage());
+      check("記録が無ければ平均は「—」", byId(empty, "week-stats").children[2].textContent.includes("—"));
+    }
+  }
+
   console.log("");
   console.log("結果: " + passed + " passed, " + failed + " failed");
   process.exit(failed > 0 ? 1 : 0);
