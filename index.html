@@ -180,14 +180,14 @@
   <!-- 記録のグラフ（Pro） -->
   <section class="card" aria-label="記録のグラフ">
     <h2>記録のグラフ <span class="tag">Pro</span></h2>
-    <p id="chart-locked" class="note">過去14日間のカロリーの推移をグラフでふり返れるのは、Proの機能です。</p>
+    <p id="chart-locked" class="note">過去1か月（30日間）のカロリーの推移をグラフでふり返れるのは、Proの機能です。</p>
     <div id="chart-area" class="hidden">
       <div id="chart-plot" class="chart-plot"></div>
       <div id="chart-labels" class="chart-labels"></div>
       <p id="chart-empty" class="empty hidden">まだデータがありません。記録がたまると、ここにグラフが表示されます。</p>
       <div class="legend" aria-hidden="true"><span><i class="key key-p"></i>たんぱく質</span><span><i class="key key-f"></i>脂質</span><span><i class="key key-c"></i>炭水化物</span><span><i class="key key-target"></i>目標</span></div>
       <p id="chart-tip" class="chart-tip" role="status">棒にふれると、その日の内訳が出ます。</p>
-      <p class="note">直近14日間のカロリーを、たんぱく質（×4kcal）・脂質（×9kcal）・炭水化物（×4kcal）に分けて積み上げています。点線は1日の目標カロリーです。</p>
+      <p class="note">直近30日間のカロリーを、たんぱく質（×4kcal）・脂質（×9kcal）・炭水化物（×4kcal）に分けて積み上げています。点線は1日の目標カロリーです。</p>
       <button id="history-csv-button" class="btn-secondary" type="button">履歴をCSVで書き出す</button>
     </div>
   </section>
@@ -409,7 +409,7 @@
     <div id="pro-locked">
       <p>もっと便利に使いたい方へ。Proでは次の機能が使えます。</p>
       <ul class="pro-features">
-        <li>過去14日間の記録をグラフでふり返る</li>
+        <li>過去1か月（30日間）の記録をグラフでふり返る</li>
         <li>体重や目的から目標カロリー・PFCを自動計算</li>
         <li>自分の食品を200件まで登録できる</li>
         <li>目標体重と期限から、食べた量と体重の推移で必要カロリーを毎日自動で計算</li>

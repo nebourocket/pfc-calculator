@@ -378,7 +378,7 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
   position: relative;
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: 2px;
   height: 200px;
   border-bottom: 1px solid var(--line);
 }
@@ -407,12 +407,11 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
   pointer-events: none;
 }
 
-.chart-labels { display: flex; gap: 4px; margin-top: 6px; }
-.chart-labels span { flex: 1; min-width: 0; text-align: center; font-size: 0.62rem; color: var(--muted); white-space: nowrap; }
-/* スマホでは日付を1日おきに出す（重なって読めなくなるため） */
-@media (max-width: 599px) {
-  .chart-labels span:nth-child(even) { visibility: hidden; }
-}
+.chart-labels { display: flex; gap: 2px; margin-top: 6px; }
+/* 日付は5日おき。幅の狭い列からはみ出しても読めるよう、はみ出しを許す */
+.chart-labels span { flex: 1; min-width: 0; text-align: center; font-size: 0.66rem; color: var(--muted); white-space: nowrap; overflow: visible; display: flex; justify-content: center; }
+/* 右端（今日）は、はみ出さないよう右にそろえる */
+.chart-labels span:last-child { justify-content: flex-end; color: var(--ink); font-weight: 700; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 0.8rem; color: var(--ink-2); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
