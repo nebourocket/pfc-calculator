@@ -21,6 +21,8 @@
   var MAX_WORKOUT_ITEMS = 50;        // 1日に記録できる筋トレの件数
   var STREAK_MIN_SCORE = 50;         // 連続記録に数える1日のスコアの下限
   var WEIGHT_CHART_DAYS = 30;        // 体重のグラフに出す日数
+  var WEEK_DAYS = 7;                 // 週のふり返りで見る日数
+  var TOAST_MS = 4000;               // お知らせを出しておく時間（ミリ秒）
   var CYCLE_SHIFT = 0.1;             // トレ日に上乗せする割合（目標カロリーの10%）
   var MUSCLES = ["胸", "背中", "脚", "肩", "腕", "腹", "その他"];
   var MAX_SEARCH_RESULTS = 100;      // 食品の検索で一度に出す件数
@@ -393,7 +395,9 @@
       scores: sanitizeScores(parsed.scores),
       mealSets: sanitizeMealSets(parsed.mealSets),
       recentFoods: sanitizeRecent(parsed.recentFoods),
-      lastDay: sanitizeLastDay(parsed.lastDay)
+      lastDay: sanitizeLastDay(parsed.lastDay),
+      celebrated: isDateString(parsed.celebrated) ? parsed.celebrated : null,
+      streakNoticed: isDateString(parsed.streakNoticed) ? parsed.streakNoticed : null
     };
   }
 
@@ -403,7 +407,7 @@
       pro: false, day: todayString(), history: {}, profile: null,
       license: null, pendingSession: null,
       weights: {}, workouts: {}, plan: null, scores: {}, mealSets: [],
-      recentFoods: [], lastDay: null
+      recentFoods: [], lastDay: null, celebrated: null, streakNoticed: null
     };
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -798,13 +802,13 @@
   // 体重の記録15・筋トレの記録15。
   function dayScore(t, targets, hasWeight, hasWorkout) {
     var items = [
-      { label: "食事を記録した", pts: 20, got: t.kcal > 0 },
-      { label: "カロリーが目標の±10%以内", pts: 30,
+      { label: "食事を記録した", short: "食事", pts: 20, got: t.kcal > 0 },
+      { label: "カロリーが目標の±10%以内", short: "カロリー±10%", pts: 30,
         got: t.kcal > 0 && targets.kcal > 0 && Math.abs(t.kcal - targets.kcal) <= targets.kcal * 0.1 },
-      { label: "たんぱく質が目標の90%以上", pts: 20,
+      { label: "たんぱく質が目標の90%以上", short: "たんぱく質90%", pts: 20,
         got: targets.p > 0 && t.p >= targets.p * 0.9 },
-      { label: "体重を記録した", pts: 15, got: hasWeight },
-      { label: "筋トレを記録した", pts: 15, got: hasWorkout }
+      { label: "体重を記録した", short: "体重", pts: 15, got: hasWeight },
+      { label: "筋トレを記録した", short: "筋トレ", pts: 15, got: hasWorkout }
     ];
     var total = 0;
     items.forEach(function (x) { if (x.got) total += x.pts; });
@@ -837,6 +841,233 @@
       }
     });
     return { current: current, best: best, total: sum };
+  }
+
+  // ---------- また開きたくなる仕掛け（無料）：記録の連続・今日のチェック・週のふり返り ----------
+  // 食事を記録した日（過去の記録に残った日と、今日すでに食べたものがあれば今日）。
+  function loggedDateSet() {
+    var out = {};
+    Object.keys(state.history).forEach(function (d) { if (state.history[d].kcal > 0) out[d] = true; });
+    if (totals().kcal > 0) out[todayString()] = true;
+    return out;
+  }
+
+  // 記録の連続：今日（まだなら昨日）からさかのぼって、食事を記録した日が何日続いているか。
+  // best は今日を除いた、これまでの最長（今日で更新したかを知るため）。
+  function logStreak() {
+    var days = loggedDateSet();
+    var today = todayString();
+    var current = 0;
+    var d = days[today] ? today : addDays(today, -1);
+    while (days[d]) { current += 1; d = addDays(d, -1); }
+    var bestBefore = 0, run = 0, prev = null;
+    Object.keys(days).sort().forEach(function (date) {
+      if (date === today) return;
+      run = (prev !== null && daysBetween(prev, date) === 1) ? run + 1 : 1;
+      prev = date;
+      if (run > bestBefore) bestBefore = run;
+    });
+    return { current: current, bestBefore: bestBefore, today: !!days[today] };
+  }
+
+  function goalMet(t, targets) {
+    return t.kcal > 0 && targets.kcal > 0 && Math.abs(t.kcal - targets.kcal) <= targets.kcal * 0.1 &&
+      targets.p > 0 && t.p >= targets.p * 0.9;
+  }
+
+  // 次にやることを1つだけ案内する（たんぱく質は、鶏むね肉なら何gかを成分表の値から計算する）。
+  function nextStep(t, targets, items) {
+    var today = todayString();
+    if (!items[0].got) return { text: "まずは今日食べたものを1つ記録してみましょう。" };
+    if (targets.p > 0 && t.p < targets.p * 0.9) {
+      var need = targets.p * 0.9 - t.p;
+      var chicken = findFood("chicken-breast");
+      var hint = chicken && chicken.p > 0
+        ? "（鶏むね肉なら約" + Math.ceil(need / chicken.p * 100 / 10) * 10 + "g）" : "";
+      return { text: "たんぱく質があと " + fmt(Math.ceil(need), 0) + "g で達成です" + hint + "。" };
+    }
+    // カロリーの判定は、チェックの項目（dayScore）と同じものを使う。
+    if (!items[1].got && targets.kcal > 0 && t.kcal < targets.kcal) {
+      return { text: "目標カロリーの±10%まで、あと " + fmt(Math.max(1, Math.ceil(targets.kcal * 0.9 - t.kcal)), 0) + "kcal です。" };
+    }
+    if (!items[1].got && targets.kcal > 0) {
+      return { text: "今日は目標を " + fmt(Math.round(t.kcal - targets.kcal), 0) + "kcal 超えました。明日また整えれば大丈夫です。" };
+    }
+    if (state.weights[today] === undefined) return { text: "体重も記録すると、変化が見えてきます。", goto: true };
+    if (!(state.workouts[today] && state.workouts[today].length)) {
+      return { text: "筋トレをした日は、からだタブに記録しておきましょう。", goto: true };
+    }
+    return { text: "今日のチェックはすべて達成です。また明日。" };
+  }
+
+  var toastTimer = null;
+  function showToast(message) {
+    var el = els["toast"];
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove("hidden");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.add("hidden"); }, TOAST_MS);
+  }
+
+  // 前回描いたときの様子。起動直後の描画ではお祝い・お知らせを出さず、操作で変わった瞬間だけ出す。
+  var lastCheckin = null;
+
+  function renderCheckin() {
+    if (!els["check-list"]) return;
+    var t = totals();
+    var targets = state.targets;
+    var items = todayScore().items;
+    var ul = els["check-list"];
+    ul.innerHTML = "";
+    items.forEach(function (x) {
+      var li = document.createElement("li");
+      li.className = "check" + (x.got ? " done" : "");
+      var tick = document.createElement("span");
+      tick.className = "check-tick";
+      tick.setAttribute("aria-hidden", "true");
+      var label = document.createElement("span");
+      label.textContent = x.short;
+      li.setAttribute("aria-label", x.label + (x.got ? "：達成" : "：まだ"));
+      li.appendChild(tick);
+      li.appendChild(label);
+      ul.appendChild(li);
+    });
+
+    var step = nextStep(t, targets, items);
+    els["check-next"].textContent = step.text;
+    els["check-go"].classList.toggle("hidden", !step.goto);
+
+    var st = logStreak();
+    els["streak-badge"].classList.toggle("is-on", st.current > 0);
+    els["streak-text"].textContent = "";
+    if (st.current > 0) {
+      var strong = document.createElement("strong");
+      strong.textContent = st.current;
+      els["streak-text"].appendChild(strong);
+      var rest = document.createElement("span");
+      rest.textContent = "日連続で記録" + (st.today ? "" : "中（今日の記録で更新）");
+      els["streak-text"].appendChild(rest);
+    } else {
+      els["streak-text"].textContent = "今日から記録を始めよう";
+    }
+
+    var met = goalMet(t, targets);
+    var today = todayString();
+    if (!lastCheckin) {
+      // 起動直後はお祝いもお知らせも出さない。
+      els["celebrate"].classList.add("hidden");
+      els["toast"].classList.add("hidden");
+    } else {
+      // 今日はじめて食事を記録した瞬間：連続日数を知らせる（自己ベストなら、そう伝える）。1日1回だけ。
+      if (!lastCheckin.loggedToday && st.today && st.current >= 2 && state.streakNoticed !== today) {
+        state.streakNoticed = today;
+        saveState();
+        showToast(st.current > st.bestBefore
+          ? "記録の連続が自己ベスト更新：" + st.current + "日"
+          : st.current + "日連続で記録しています");
+      }
+      // 食べたものを変えて目標を満たした瞬間：その日1回だけお祝いを出す
+      // （目標の値を変えただけで満たしたときは出さない）。
+      var intakeChanged = t.kcal !== lastCheckin.kcal || t.p !== lastCheckin.p;
+      if (!lastCheckin.met && met && intakeChanged && state.celebrated !== today) {
+        state.celebrated = today;
+        saveState();
+        els["celebrate"].classList.remove("hidden");
+      }
+    }
+    // 目標から外れたら、お祝いの表示は閉じる。
+    if (!met) els["celebrate"].classList.add("hidden");
+    lastCheckin = { met: met, loggedToday: st.today, kcal: t.kcal, p: t.p };
+  }
+
+  // 週のふり返り：昨日までの7日と、その前の7日を比べる（今日は途中なので数に入れない）。
+  function weekSummary(endDate) {
+    var days = [];
+    for (var i = WEEK_DAYS - 1; i >= 0; i--) days.push(addDays(endDate, -i));
+    var logged = days.filter(function (d) { return state.history[d] && state.history[d].kcal > 0; });
+    var sum = { kcal: 0, p: 0 };
+    logged.forEach(function (d) { sum.kcal += state.history[d].kcal; sum.p += state.history[d].p; });
+    var hits = logged.filter(function (d) { return goalMet(state.history[d], state.targets); }).length;
+    return {
+      days: days, logged: logged.length, hits: hits,
+      kcal: logged.length ? sum.kcal / logged.length : null,
+      p: logged.length ? sum.p / logged.length : null
+    };
+  }
+
+  function renderWeek() {
+    if (!els["week-days"]) return;
+    var today = todayString();
+    var yesterday = addDays(today, -1);
+    var cur = weekSummary(yesterday);
+    var prev = weekSummary(addDays(yesterday, -WEEK_DAYS));
+    els["week-range"].textContent = "下の数字は " + shortDate(cur.days[0]) + "〜" + shortDate(yesterday) + "（昨日までの7日間）";
+
+    // 日ごとの印は、今日を含む直近7日（今日の分も途中経過として見せる）。
+    var ol = els["week-days"];
+    ol.innerHTML = "";
+    var t = totals();
+    for (var i = WEEK_DAYS - 1; i >= 0; i--) {
+      var d = addDays(today, -i);
+      var v = d === today ? t : state.history[d];
+      var logged = !!(v && v.kcal > 0);
+      var hit = logged && goalMet(v, state.targets);
+      var li = document.createElement("li");
+      li.className = "week-day" + (hit ? " hit" : logged ? " logged" : "") + (d === today ? " today" : "");
+      var dot = document.createElement("span");
+      dot.className = "week-dot";
+      var label = document.createElement("span");
+      label.className = "week-label";
+      label.textContent = d === today ? "今日" : shortDate(d);
+      li.setAttribute("aria-label", formatDateLabel(d) + "：" + (hit ? "目標内" : logged ? "記録あり" : "記録なし"));
+      li.appendChild(dot);
+      li.appendChild(label);
+      ol.appendChild(li);
+    }
+
+    var box = els["week-stats"];
+    box.innerHTML = "";
+    var delta = function (a, b, unit, digits) {
+      if (a === null || b === null) return "前の週：記録なし";
+      var diff = a - b;
+      var r = digits ? Math.round(diff * 10) / 10 : Math.round(diff);
+      return "前の週 " + (r > 0 ? "+" : r < 0 ? "−" : "±") + fmt(Math.abs(r), digits) + unit;
+    };
+    [
+      { label: "記録した日", value: cur.logged, unit: "/ 7日", sub: [delta(cur.logged, prev.logged, "日", 0)] },
+      { label: "目標内の日", value: cur.hits, unit: "日", sub: ["カロリー±10%", "P 90%以上"] },
+      { label: "平均カロリー", value: cur.kcal === null ? "—" : fmt(cur.kcal, 0), unit: "kcal",
+        sub: ["目標 " + fmt(state.targets.kcal, 0) + "kcal", delta(cur.kcal, prev.kcal, "kcal", 0)] },
+      { label: "平均たんぱく質", value: cur.p === null ? "—" : fmt(cur.p, 1), unit: "g",
+        sub: ["目標 " + fmt(state.targets.p, 0) + "g", delta(cur.p, prev.p, "g", 1)] }
+    ].forEach(function (x) {
+      var div = document.createElement("div");
+      div.className = "stat";
+      var l = document.createElement("p");
+      l.className = "stat-label";
+      l.textContent = x.label;
+      var v = document.createElement("p");
+      v.className = "stat-value";
+      var n = document.createElement("span");
+      n.textContent = x.value;
+      v.appendChild(n);
+      var u = document.createElement("small");
+      u.textContent = x.unit;
+      v.appendChild(u);
+      div.appendChild(l);
+      div.appendChild(v);
+      x.sub.forEach(function (line) {
+        var sub = document.createElement("p");
+        sub.className = "stat-delta";
+        sub.textContent = line;
+        div.appendChild(sub);
+      });
+      box.appendChild(div);
+    });
+    els["week-note"].textContent = cur.logged
+      ? "平均は記録した日だけで出しています。丸の塗りつぶしは目標内の日、輪は記録した日です。"
+      : "記録した日がたまると、ここに1週間のまとめが出ます。丸の塗りつぶしは目標内の日、輪は記録した日です。";
   }
 
   // ---------- Pro：グラフ用データ ----------
@@ -1185,7 +1416,9 @@
    "set-list", "set-empty", "set-message",
    "weight-chart", "weight-chart-note", "plan-cycle", "workout-muscle", "volume-list",
    "plate", "plate-p", "plate-f", "plate-c", "plate-target", "remaining-kcal", "today-label", "chart-tip",
-   "body-pro-area", "recent-area", "recent-list", "copy-last-button"
+   "body-pro-area", "recent-area", "recent-list", "copy-last-button",
+   "check-list", "check-next", "check-go", "streak-badge", "streak-text", "celebrate", "toast",
+   "week-range", "week-days", "week-stats", "week-note"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -1200,8 +1433,10 @@
     renderBar("f", t.f, targets.f);
     renderBar("c", t.c, targets.c);
     renderPlate(t, targets);
-    // スコアは合計と目標で決まるので、合計を描き直すたびに一緒に描き直す。
+    // スコア・今日のチェック・週のふり返りは合計と目標で決まるので、合計を描き直すたびに一緒に描き直す。
     renderScore();
+    renderCheckin();
+    renderWeek();
   }
 
   // 今日の皿：P×4・F×9・C×4 の kcal を左から積み上げ、目標の位置に点線を引く。
@@ -1553,6 +1788,8 @@
 
   // 体重・筋トレの記録は無料。部位ごとのセット数と計画（自動計算）は Pro。
   function renderBody() {
+    // 体重・筋トレは今日のチェックにも出るので、一緒に描き直す。
+    renderCheckin();
     if (!els["body-locked"]) return;
     els["body-locked"].classList.toggle("hidden", state.pro);
     els["body-pro-area"].classList.toggle("hidden", !state.pro);
@@ -2191,6 +2428,7 @@
         // 食品の参照は、読み込んだバックアップの savedFoods で確かめる（先に state を差し替える）。
         state = next;
         state.entries = state.entries.filter(function (x) { return !!findFood(x.foodId); });
+        lastCheckin = null; // 読み込んだ記録で、お祝い・お知らせを出さない
         rollOverIfNeeded();
         applyPlanTargets();
         saveState();
@@ -2239,6 +2477,10 @@
     }
     tabs.forEach(function (t) {
       t.addEventListener("click", function () { show(t.getAttribute("data-tab"), true); });
+    });
+    // 今日のチェックの「からだへ」など、data-goto を持つボタンからもタブを切り替える。
+    Array.prototype.slice.call(document.querySelectorAll("[data-goto]")).forEach(function (b) {
+      b.addEventListener("click", function () { show(b.getAttribute("data-goto"), true); });
     });
     var saved = null;
     try { saved = localStorage.getItem("pfc-calculator-tab"); } catch (e) { saved = null; }

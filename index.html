@@ -70,6 +70,24 @@
     </div>
   </section>
 
+  <!-- 今日のチェック（無料）：達成したことと、次にやることをひと目で -->
+  <section class="card checkin" id="checkin" aria-label="今日のチェック">
+    <div class="checkin-head">
+      <h2>今日のチェック</h2>
+      <p class="streak" id="streak-badge"><span class="streak-mark" aria-hidden="true"></span><span id="streak-text">記録を始めよう</span></p>
+    </div>
+    <ul id="check-list" class="checks"></ul>
+    <div class="check-next-row">
+      <p id="check-next" class="check-next"></p>
+      <button id="check-go" class="btn-secondary btn-inline hidden" type="button" data-goto="body">からだへ</button>
+    </div>
+    <div id="celebrate" class="celebrate hidden" role="status">
+      <div class="confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <p class="celebrate-title">今日の目標クリア</p>
+      <p class="celebrate-sub">カロリーは目標の±10%以内、たんぱく質も足りています。</p>
+    </div>
+  </section>
+
   <!-- 食品を追加 -->
   <section class="card" aria-label="食品を追加">
     <h2>食品を追加</h2>
@@ -135,6 +153,15 @@
 </div>
 
 <div class="panel" data-panel="log" hidden>
+  <!-- 週のふり返り（無料） -->
+  <section class="card" aria-label="週のふり返り">
+    <h2>週のふり返り</h2>
+    <ol id="week-days" class="week-days" aria-label="直近7日の記録"></ol>
+    <p id="week-range" class="week-range"></p>
+    <div id="week-stats" class="week-stats"></div>
+    <p id="week-note" class="note"></p>
+  </section>
+
   <!-- 記録のグラフ（Pro） -->
   <section class="card" aria-label="記録のグラフ">
     <h2>記録のグラフ <span class="tag">Pro</span></h2>
@@ -413,6 +440,9 @@
   <p class="kindle-note">Kindle『大学院進学を迷っている大学4年生へ』を執筆中です。できあがったら、こちらでもお知らせします。</p>
   <p class="credit">つくった人：寝坊ロケット（nebourocket）</p>
 </footer>
+
+<!-- 連続記録などのお知らせ（数秒で消える） -->
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
 <script src="foods.js"></script>
