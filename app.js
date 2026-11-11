@@ -5,6 +5,18 @@
 (function () {
   "use strict";
 
+  // 画面に出す文言は i18n.js（日本語・English・中文）を通す。i18n.js が無い環境では日本語のまま出す。
+  // 文言は「文ごと」のひな形で渡し、数字などは {名前} の穴に入れる。
+  var I18N = window.PFC_I18N || null;
+  function t(s, v) {
+    if (I18N) return I18N.t(s, v);
+    return String(s).replace(/\{(\w+)\}/g, function (m, k) {
+      return v && Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m;
+    });
+  }
+  // 食品名の表示用。自分の食品は、登録した名前のまま出す。
+  function foodLabel(food) { return I18N ? I18N.foodName(food) : food.name; }
+
   var STORAGE_KEY = "pfc-calculator-v1";
   var WELCOME_KEY = "pfc-calculator-welcome"; // 「はじめに」を閉じたかどうか（記録とは別に覚える）
   var FREE_CUSTOM_LIMIT = 5;         // 無料版の自由枠の登録上限
@@ -103,7 +115,15 @@
   function formatDateLabel(dateStr) {
     var parts = dateStr.split("-");
     var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    var week = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+    var lang = I18N ? I18N.lang : "ja";
+    if (lang === "en") {
+      return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()] + ", " +
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()] +
+        " " + Number(parts[2]);
+    }
+    var week = (lang === "zh"
+      ? ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+      : ["日", "月", "火", "水", "木", "金", "土"])[d.getDay()];
     return Number(parts[1]) + "月" + Number(parts[2]) + "日（" + week + "）";
   }
 
@@ -878,28 +898,33 @@
   }
 
   // 次にやることを1つだけ案内する（たんぱく質は、鶏むね肉なら何gかを成分表の値から計算する）。
-  function nextStep(t, targets, items) {
+  function nextStep(tot, targets, items) {
     var today = todayString();
-    if (!items[0].got) return { text: "まずは今日食べたものを1つ記録してみましょう。" };
-    if (targets.p > 0 && t.p < targets.p * 0.9) {
-      var need = targets.p * 0.9 - t.p;
+    if (!items[0].got) return { text: t("まずは今日食べたものを1つ記録してみましょう。") };
+    if (targets.p > 0 && tot.p < targets.p * 0.9) {
+      var need = targets.p * 0.9 - tot.p;
       var chicken = findFood("chicken-breast");
-      var hint = chicken && chicken.p > 0
-        ? "（鶏むね肉なら約" + Math.ceil(need / chicken.p * 100 / 10) * 10 + "g）" : "";
-      return { text: "たんぱく質があと " + fmt(Math.ceil(need), 0) + "g で達成です" + hint + "。" };
+      var vars = { n: fmt(Math.ceil(need), 0) };
+      if (chicken && chicken.p > 0) {
+        vars.g = Math.ceil(need / chicken.p * 100 / 10) * 10;
+        return { text: t("たんぱく質があと {n}g で達成です（鶏むね肉なら約{g}g）。", vars) };
+      }
+      return { text: t("たんぱく質があと {n}g で達成です。", vars) };
     }
     // カロリーの判定は、チェックの項目（dayScore）と同じものを使う。
-    if (!items[1].got && targets.kcal > 0 && t.kcal < targets.kcal) {
-      return { text: "目標カロリーの±10%まで、あと " + fmt(Math.max(1, Math.ceil(targets.kcal * 0.9 - t.kcal)), 0) + "kcal です。" };
+    if (!items[1].got && targets.kcal > 0 && tot.kcal < targets.kcal) {
+      return { text: t("目標カロリーの±10%まで、あと {n}kcal です。",
+        { n: fmt(Math.max(1, Math.ceil(targets.kcal * 0.9 - tot.kcal)), 0) }) };
     }
     if (!items[1].got && targets.kcal > 0) {
-      return { text: "今日は目標を " + fmt(Math.round(t.kcal - targets.kcal), 0) + "kcal 超えました。明日また整えれば大丈夫です。" };
+      return { text: t("今日は目標を {n}kcal 超えました。明日また整えれば大丈夫です。",
+        { n: fmt(Math.round(tot.kcal - targets.kcal), 0) }) };
     }
-    if (state.weights[today] === undefined) return { text: "体重も記録すると、変化が見えてきます。", goto: true };
+    if (state.weights[today] === undefined) return { text: t("体重も記録すると、変化が見えてきます。"), goto: true };
     if (!(state.workouts[today] && state.workouts[today].length)) {
-      return { text: "筋トレをした日は、からだタブに記録しておきましょう。", goto: true };
+      return { text: t("筋トレをした日は、からだタブに記録しておきましょう。"), goto: true };
     }
-    return { text: "今日のチェックはすべて達成です。また明日。" };
+    return { text: t("今日のチェックはすべて達成です。また明日。") };
   }
 
   var toastTimer = null;
@@ -917,7 +942,7 @@
 
   function renderCheckin() {
     if (!els["check-list"]) return;
-    var t = totals();
+    var tot = totals();
     var targets = state.targets;
     var items = todayScore().items;
     var ul = els["check-list"];
@@ -929,14 +954,15 @@
       tick.className = "check-tick";
       tick.setAttribute("aria-hidden", "true");
       var label = document.createElement("span");
-      label.textContent = x.short;
-      li.setAttribute("aria-label", x.label + (x.got ? "：達成" : "：まだ"));
+      label.textContent = t(x.short);
+      li.setAttribute("aria-label", x.got
+        ? t("{label}：達成", { label: t(x.label) }) : t("{label}：まだ", { label: t(x.label) }));
       li.appendChild(tick);
       li.appendChild(label);
       ul.appendChild(li);
     });
 
-    var step = nextStep(t, targets, items);
+    var step = nextStep(tot, targets, items);
     els["check-next"].textContent = step.text;
     els["check-go"].classList.toggle("hidden", !step.goto);
 
@@ -948,13 +974,13 @@
       strong.textContent = st.current;
       els["streak-text"].appendChild(strong);
       var rest = document.createElement("span");
-      rest.textContent = "日連続で記録" + (st.today ? "" : "中（今日の記録で更新）");
+      rest.textContent = st.today ? t("日連続で記録") : t("日連続で記録中（今日の記録で更新）");
       els["streak-text"].appendChild(rest);
     } else {
-      els["streak-text"].textContent = "今日から記録を始めよう";
+      els["streak-text"].textContent = t("今日から記録を始めよう");
     }
 
-    var met = goalMet(t, targets);
+    var met = goalMet(tot, targets);
     var today = todayString();
     if (!lastCheckin) {
       // 起動直後はお祝いもお知らせも出さない。
@@ -966,12 +992,12 @@
         state.streakNoticed = today;
         saveState();
         showToast(st.current > st.bestBefore
-          ? "記録の連続が自己ベスト更新：" + st.current + "日"
-          : st.current + "日連続で記録しています");
+          ? t("記録の連続が自己ベスト更新：{n}日", { n: st.current })
+          : t("{n}日連続で記録しています", { n: st.current }));
       }
       // 食べたものを変えて目標を満たした瞬間：その日1回だけお祝いを出す
       // （目標の値を変えただけで満たしたときは出さない）。
-      var intakeChanged = t.kcal !== lastCheckin.kcal || t.p !== lastCheckin.p;
+      var intakeChanged = tot.kcal !== lastCheckin.kcal || tot.p !== lastCheckin.p;
       if (!lastCheckin.met && met && intakeChanged && state.celebrated !== today) {
         state.celebrated = today;
         saveState();
@@ -980,7 +1006,7 @@
     }
     // 目標から外れたら、お祝いの表示は閉じる。
     if (!met) els["celebrate"].classList.add("hidden");
-    lastCheckin = { met: met, loggedToday: st.today, kcal: t.kcal, p: t.p };
+    lastCheckin = { met: met, loggedToday: st.today, kcal: tot.kcal, p: tot.p };
   }
 
   // 週のふり返り：昨日までの7日と、その前の7日を比べる（今日は途中なので数に入れない）。
@@ -1004,15 +1030,16 @@
     var yesterday = addDays(today, -1);
     var cur = weekSummary(yesterday);
     var prev = weekSummary(addDays(yesterday, -WEEK_DAYS));
-    els["week-range"].textContent = "下の数字は " + shortDate(cur.days[0]) + "〜" + shortDate(yesterday) + "（昨日までの7日間）";
+    els["week-range"].textContent = t("下の数字は {from}〜{to}（昨日までの7日間）",
+      { from: shortDate(cur.days[0]), to: shortDate(yesterday) });
 
     // 日ごとの印は、今日を含む直近7日（今日の分も途中経過として見せる）。
     var ol = els["week-days"];
     ol.innerHTML = "";
-    var t = totals();
+    var tot = totals();
     for (var i = WEEK_DAYS - 1; i >= 0; i--) {
       var d = addDays(today, -i);
-      var v = d === today ? t : state.history[d];
+      var v = d === today ? tot : state.history[d];
       var logged = !!(v && v.kcal > 0);
       var hit = logged && goalMet(v, state.targets);
       var li = document.createElement("li");
@@ -1021,8 +1048,9 @@
       dot.className = "week-dot";
       var label = document.createElement("span");
       label.className = "week-label";
-      label.textContent = d === today ? "今日" : shortDate(d);
-      li.setAttribute("aria-label", formatDateLabel(d) + "：" + (hit ? "目標内" : logged ? "記録あり" : "記録なし"));
+      label.textContent = d === today ? t("今日") : shortDate(d);
+      li.setAttribute("aria-label", hit ? t("{date}：目標内", { date: formatDateLabel(d) })
+        : logged ? t("{date}：記録あり", { date: formatDateLabel(d) }) : t("{date}：記録なし", { date: formatDateLabel(d) }));
       li.appendChild(dot);
       li.appendChild(label);
       ol.appendChild(li);
@@ -1031,18 +1059,19 @@
     var box = els["week-stats"];
     box.innerHTML = "";
     var delta = function (a, b, unit, digits) {
-      if (a === null || b === null) return "前の週：記録なし";
+      if (a === null || b === null) return t("前の週：記録なし");
       var diff = a - b;
       var r = digits ? Math.round(diff * 10) / 10 : Math.round(diff);
-      return "前の週 " + (r > 0 ? "+" : r < 0 ? "−" : "±") + fmt(Math.abs(r), digits) + unit;
+      var val = (r > 0 ? "+" : r < 0 ? "−" : "±") + fmt(Math.abs(r), digits);
+      return unit === "日" ? t("前の週 {v}日", { v: val }) : t("前の週 {v}{unit}", { v: val, unit: unit });
     };
     [
-      { label: "記録した日", value: cur.logged, unit: "/ 7日", sub: [delta(cur.logged, prev.logged, "日", 0)] },
-      { label: "目標内の日", value: cur.hits, unit: "日", sub: ["カロリー±10%", "P 90%以上"] },
-      { label: "平均カロリー", value: cur.kcal === null ? "—" : fmt(cur.kcal, 0), unit: "kcal",
-        sub: ["目標 " + fmt(state.targets.kcal, 0) + "kcal", delta(cur.kcal, prev.kcal, "kcal", 0)] },
-      { label: "平均たんぱく質", value: cur.p === null ? "—" : fmt(cur.p, 1), unit: "g",
-        sub: ["目標 " + fmt(state.targets.p, 0) + "g", delta(cur.p, prev.p, "g", 1)] }
+      { label: t("記録した日"), value: cur.logged, unit: t("/ 7日"), sub: [delta(cur.logged, prev.logged, "日", 0)] },
+      { label: t("目標内の日"), value: cur.hits, unit: t("日"), sub: [t("カロリー±10%"), t("P 90%以上")] },
+      { label: t("平均カロリー"), value: cur.kcal === null ? "—" : fmt(cur.kcal, 0), unit: "kcal",
+        sub: [t("目標 {n}kcal", { n: fmt(state.targets.kcal, 0) }), delta(cur.kcal, prev.kcal, "kcal", 0)] },
+      { label: t("平均たんぱく質"), value: cur.p === null ? "—" : fmt(cur.p, 1), unit: "g",
+        sub: [t("目標 {n}g", { n: fmt(state.targets.p, 0) }), delta(cur.p, prev.p, "g", 1)] }
     ].forEach(function (x) {
       var div = document.createElement("div");
       div.className = "stat";
@@ -1068,8 +1097,8 @@
       box.appendChild(div);
     });
     els["week-note"].textContent = cur.logged
-      ? "◎は目標内の日、○は記録した日です。平均は記録した日だけで出しています。"
-      : "記録した日がたまると、ここに1週間のまとめが出ます。◎は目標内の日、○は記録した日です。";
+      ? t("◎は目標内の日、○は記録した日です。平均は記録した日だけで出しています。")
+      : t("記録した日がたまると、ここに1週間のまとめが出ます。◎は目標内の日、○は記録した日です。");
   }
 
   // ---------- Pro：グラフ用データ ----------
@@ -1101,23 +1130,23 @@
   }
 
   function buildTodayCsv() {
-    var lines = ["食品名,量(g),カロリー(kcal),たんぱく質(g),脂質(g),炭水化物(g)"];
+    var lines = [t("食品名,量(g),カロリー(kcal),たんぱく質(g),脂質(g),炭水化物(g)")];
     state.entries.forEach(function (entry) {
       var food = findFood(entry.foodId);
       var v = entryValues(entry);
       if (!food || !v) return;
       lines.push([
-        csvEscape(food.name), entry.grams,
+        csvEscape(foodLabel(food)), entry.grams,
         Math.round(v.kcal), round1(v.p), round1(v.f), round1(v.c)
       ].join(","));
     });
-    var t = totals();
-    lines.push(["合計", "", Math.round(t.kcal), round1(t.p), round1(t.f), round1(t.c)].join(","));
+    var tot = totals();
+    lines.push([t("合計"), "", Math.round(tot.kcal), round1(tot.p), round1(tot.f), round1(tot.c)].join(","));
     return lines.join("\r\n");
   }
 
   function buildHistoryCsv() {
-    var lines = ["日付,カロリー(kcal),たんぱく質(g),脂質(g),炭水化物(g),体重(kg)"];
+    var lines = [t("日付,カロリー(kcal),たんぱく質(g),脂質(g),炭水化物(g),体重(kg)")];
     function weightCell(date) { return state.weights[date] !== undefined ? state.weights[date] : ""; }
     var today = todayString();
     // 食事の記録が無く、体重だけ記録した日も行にする。
@@ -1131,8 +1160,8 @@
         ? [date, Math.round(v.kcal), round1(v.p), round1(v.f), round1(v.c), weightCell(date)].join(",")
         : [date, "", "", "", "", weightCell(date)].join(","));
     });
-    var t = totals();
-    lines.push([today, Math.round(t.kcal), round1(t.p), round1(t.f), round1(t.c), weightCell(today)].join(","));
+    var tot = totals();
+    lines.push([today, Math.round(tot.kcal), round1(tot.p), round1(tot.f), round1(tot.c), weightCell(today)].join(","));
     return lines.join("\r\n");
   }
 
@@ -1321,7 +1350,7 @@
   // session_id を Worker に渡して、支払い済みならライセンスキーを受け取る。
   function claimLicense(sessionId) {
     if (!LICENSE_API_URL || typeof fetch !== "function") return Promise.resolve();
-    els["pro-message"].textContent = "ご購入を確認しています…";
+    els["pro-message"].textContent = t("ご購入を確認しています…");
     return fetch(LICENSE_API_URL + "?session_id=" + encodeURIComponent(sessionId),
       { method: "GET", credentials: "omit", cache: "no-store" })
       .then(function (res) {
@@ -1343,20 +1372,20 @@
           state.pendingSession = null;
           saveState();
           els["pro-message"].textContent =
-            "お支払いを確認できませんでした。決済が完了しているのにこの表示が出る場合は、お問い合わせください。";
+            t("お支払いを確認できませんでした。決済が完了しているのにこの表示が出る場合は、お問い合わせください。");
           return;
         }
         if (r.status === 402 || r.status === 404) {
           // 支払いの反映待ちや設定の誤りもあり得るので、session_id は捨てずに次の起動で再確認する。
           els["pro-message"].textContent =
-            "お支払いをまだ確認できていません。決済が完了していれば、しばらくしてページを再読み込みすると有効になります。続く場合はお問い合わせください。";
+            t("お支払いをまだ確認できていません。決済が完了していれば、しばらくしてページを再読み込みすると有効になります。続く場合はお問い合わせください。");
           return;
         }
         throw new Error("retry");
       })
       .catch(function () {
         els["pro-message"].textContent =
-          "ご購入の確認に失敗しました（通信エラー）。ページを再読み込みすると、もう一度確認します。";
+          t("ご購入の確認に失敗しました（通信エラー）。ページを再読み込みすると、もう一度確認します。");
       });
   }
 
@@ -1443,12 +1472,12 @@
   }
 
   // 今日のお皿：外周は目標までのカロリー、内側は P×4・F×9・C×4 のエネルギー比。
-  function renderPlate(t, targets) {
+  function renderPlate(tot, targets) {
     if (!els["plate-p"]) return;
-    var pk = t.p * 4, fk = t.f * 9, ck = t.c * 4;
+    var pk = tot.p * 4, fk = tot.f * 9, ck = tot.c * 4;
     var sum = pk + fk + ck;
     // 外周：目標までのカロリー（1周＝目標）。超えた分は内側の朱の輪で、もう1周まで描く。
-    var ratio = targets.kcal > 0 ? t.kcal / targets.kcal : 0;
+    var ratio = targets.kcal > 0 ? tot.kcal / targets.kcal : 0;
     // 長さ0の弧は、丸い線端だけが点になって見えるので隠す。
     var arc = function (el, len, rest) {
       el.setAttribute("stroke-dasharray", len.toFixed(2) + " " + rest.toFixed(2));
@@ -1466,14 +1495,17 @@
       els["share-" + x[0]].textContent = Math.round(share);
       start += share;
     });
-    els["nf-kcal"].textContent = fmt(t.kcal, 0);
-    els["plate"].setAttribute("aria-label", "今日のお皿：" + fmt(t.kcal, 0) + "kcal" +
-      (targets.kcal > 0 ? "（目標 " + fmt(targets.kcal, 0) + "kcal の " + Math.round(ratio * 100) + "%）" : "") +
-      "。エネルギーの内訳はたんぱく質 " + fmt(pk, 0) + "kcal、脂質 " + fmt(fk, 0) + "kcal、炭水化物 " + fmt(ck, 0) + "kcal");
+    els["nf-kcal"].textContent = fmt(tot.kcal, 0);
+    var split = { p: fmt(pk, 0), f: fmt(fk, 0), c: fmt(ck, 0) };
+    els["plate"].setAttribute("aria-label", targets.kcal > 0
+      ? t("今日のお皿：{kcal}kcal（目標 {target}kcal の {pct}%）。エネルギーの内訳はたんぱく質 {p}kcal、脂質 {f}kcal、炭水化物 {c}kcal",
+        { kcal: fmt(tot.kcal, 0), target: fmt(targets.kcal, 0), pct: Math.round(ratio * 100), p: split.p, f: split.f, c: split.c })
+      : t("今日のお皿：{kcal}kcal。エネルギーの内訳はたんぱく質 {p}kcal、脂質 {f}kcal、炭水化物 {c}kcal",
+        { kcal: fmt(tot.kcal, 0), p: split.p, f: split.f, c: split.c }));
     var rem = els["remaining-kcal"];
     if (targets.kcal > 0) {
-      var diff = targets.kcal - t.kcal;
-      rem.textContent = diff >= 0 ? "あと " + fmt(diff, 0) + " kcal" : fmt(-diff, 0) + " kcal オーバー";
+      var diff = targets.kcal - tot.kcal;
+      rem.textContent = diff >= 0 ? t("あと {n} kcal", { n: fmt(diff, 0) }) : t("{n} kcal オーバー", { n: fmt(-diff, 0) });
       rem.classList.toggle("is-over", diff < 0);
     } else {
       rem.textContent = "";
@@ -1518,7 +1550,9 @@
   function haystack(food) {
     var key = food.id + "|" + food.name;
     if (!haystackCache[key]) {
-      haystackCache[key] = normalizeForSearch(food.name + " " + (food.source || "") + " " + food.category);
+      // 英語・中国語の名前があれば、それでも探せるようにする。
+      var names = I18N ? I18N.foodNames(food) : [];
+      haystackCache[key] = normalizeForSearch(food.name + " " + names.join(" ") + " " + (food.source || "") + " " + food.category);
     }
     return haystackCache[key];
   }
@@ -1556,17 +1590,23 @@
     }
     if (els["food-search-count"]) {
       els["food-search-count"].textContent = !words.length
-        ? "よく使う食品を表示しています。ほかの食品（成分表と市販品" +
-          (moreFoodsState === "done" ? "の全" + (FOODS.length + MORE_FOODS.length) + "品" : "") + "）は、上の欄で探せます。"
+        ? (moreFoodsState === "done"
+          ? t("よく使う食品を表示しています。ほかの食品（成分表と市販品の全{n}品）は、上の欄で探せます。",
+            { n: FOODS.length + MORE_FOODS.length })
+          : t("よく使う食品を表示しています。ほかの食品（成分表と市販品）は、上の欄で探せます。"))
         : moreFoodsState === "loading"
-          ? (foods.length ? total + "件見つかりました。" : "") + "市販品のデータを読み込んでいます…"
+          ? (foods.length ? t("{n}件見つかりました。市販品のデータを読み込んでいます…", { n: total })
+            : t("市販品のデータを読み込んでいます…"))
         : moreFoodsState === "failed"
-          ? (foods.length ? total + "件見つかりました。" : "") + "市販品の一部を読み込めませんでした（通信を確かめて、もう一度探してください）。"
+          ? (foods.length
+            ? t("{n}件見つかりました。市販品の一部を読み込めませんでした（通信を確かめて、もう一度探してください）。", { n: total })
+            : t("市販品の一部を読み込めませんでした（通信を確かめて、もう一度探してください）。"))
         : !foods.length
-          ? "見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。"
+          ? t("見つかりませんでした。別のことばで探すか、「自分の食品を登録する」から登録できます。")
           : total > MAX_SEARCH_RESULTS
-            ? total + "件見つかりました（先頭の" + MAX_SEARCH_RESULTS + "件を表示。ことばを足すと絞り込めます）"
-            : total + "件見つかりました";
+            ? t("{n}件見つかりました（先頭の{max}件を表示。ことばを足すと絞り込めます）",
+              { n: total, max: MAX_SEARCH_RESULTS })
+            : t("{n}件見つかりました", { n: total });
     }
     var categories = [];
     foods.forEach(function (food) {
@@ -1574,12 +1614,12 @@
     });
     categories.forEach(function (category) {
       var group = document.createElement("optgroup");
-      group.label = category;
+      group.label = t(category);
       foods.forEach(function (food) {
         if (food.category !== category) return;
         var option = document.createElement("option");
         option.value = food.id;
-        option.textContent = food.name;
+        option.textContent = foodLabel(food);
         group.appendChild(option);
       });
       select.appendChild(group);
@@ -1602,7 +1642,7 @@
       var info = document.createElement("div");
       var name = document.createElement("div");
       name.className = "entry-name";
-      name.textContent = food.name;
+      name.textContent = foodLabel(food);
       var detail = document.createElement("div");
       detail.className = "entry-detail";
       detail.textContent = entry.grams + "g ・ " + fmt(v.kcal, 0) + "kcal ・ P " +
@@ -1612,7 +1652,7 @@
       var del = document.createElement("button");
       del.type = "button";
       del.className = "entry-delete";
-      del.textContent = "削除";
+      del.textContent = t("削除");
       del.addEventListener("click", function () {
         state.entries = state.entries.filter(function (e) { return e.id !== entry.id; });
         saveState();
@@ -1637,14 +1677,14 @@
       name.textContent = food.name;
       var detail = document.createElement("div");
       detail.className = "entry-detail";
-      detail.textContent = "100gあたり " + fmt(food.kcal, 0) + "kcal ・ P " +
-        fmt(food.p, 1) + "g ・ F " + fmt(food.f, 1) + "g ・ C " + fmt(food.c, 1) + "g";
+      detail.textContent = t("100gあたり {kcal}kcal ・ P {p}g ・ F {f}g ・ C {c}g",
+        { kcal: fmt(food.kcal, 0), p: fmt(food.p, 1), f: fmt(food.f, 1), c: fmt(food.c, 1) });
       info.appendChild(name);
       info.appendChild(detail);
       var del = document.createElement("button");
       del.type = "button";
       del.className = "entry-delete";
-      del.textContent = "削除";
+      del.textContent = t("削除");
       del.addEventListener("click", function () {
         state.customFoods = state.customFoods.filter(function (f) { return f.id !== food.id; });
         // この食品を使っていた今日の記録も一緒に取り除く（合計が合わなくなるため）。
@@ -1660,9 +1700,9 @@
     });
     var atLimit = state.customFoods.length >= customLimit();
     els["custom-limit-message"].textContent = state.pro
-      ? "登録上限（" + PRO_CUSTOM_LIMIT + "件）に達しました。"
-      : "無料版の登録上限（" + FREE_CUSTOM_LIMIT + "件）に達しました。Proでは" +
-        PRO_CUSTOM_LIMIT + "件まで登録できます。";
+      ? t("登録上限（{n}件）に達しました。", { n: PRO_CUSTOM_LIMIT })
+      : t("無料版の登録上限（{n}件）に達しました。Proでは{max}件まで登録できます。",
+        { n: FREE_CUSTOM_LIMIT, max: PRO_CUSTOM_LIMIT });
     els["custom-limit-message"].classList.toggle("hidden", !atLimit);
   }
 
@@ -1726,7 +1766,7 @@
     data.forEach(function (d) { if (d.kcal > max) max = d.kcal; });
     if (max <= 0) max = 1;
     function showTip(d) {
-      els["chart-tip"].textContent = formatDateLabel(d.date) + (d.isToday ? "（今日）" : "") + "　" +
+      els["chart-tip"].textContent = formatDateLabel(d.date) + (d.isToday ? t("（今日）") : "") + "　" +
         fmt(d.kcal, 0) + "kcal ・ P " + fmt(d.p, 0) + "g ・ F " + fmt(d.f, 0) + "g ・ C " + fmt(d.c, 0) + "g";
     }
     data.forEach(function (d, i) {
@@ -1756,7 +1796,7 @@
       plot.appendChild(col);
       // 30本並ぶと日付が重なるので、今日から CHART_LABEL_EVERY 日おきにだけ出す（場所は空けておく）。
       var label = document.createElement("span");
-      label.textContent = d.isToday ? "今日" : (data.length - 1 - i) % CHART_LABEL_EVERY === 0 ? d.label : "";
+      label.textContent = d.isToday ? t("今日") : (data.length - 1 - i) % CHART_LABEL_EVERY === 0 ? d.label : "";
       labels.appendChild(label);
     });
     if (state.targets.kcal > 0) {
@@ -1785,7 +1825,7 @@
       var del = document.createElement("button");
       del.type = "button";
       del.className = "entry-delete";
-      del.textContent = "削除";
+      del.textContent = t("削除");
       del.addEventListener("click", onDelete);
       li.appendChild(del);
     }
@@ -1813,11 +1853,11 @@
     var trend = weightTrend(today);
     setFieldUnlessFocused(els["weight-input"], state.weights[today]);
     var lines = [];
-    if (trend.avg7 !== null) lines.push("直近7日の平均 " + fmt(trend.avg7, 1) + "kg");
+    if (trend.avg7 !== null) lines.push(t("直近7日の平均 {n}kg", { n: fmt(trend.avg7, 1) }));
     if (trend.weeklyChange !== null && trend.span >= 7) {
-      lines.push("週あたり " + signed(trend.weeklyChange, 2) + "kg（直近14日の傾き）");
+      lines.push(t("週あたり {n}kg（直近14日の傾き）", { n: signed(trend.weeklyChange, 2) }));
     }
-    els["weight-trend"].textContent = lines.length ? lines.join(" ・ ") : "体重を記録すると、平均と増減の傾きが出ます。";
+    els["weight-trend"].textContent = lines.length ? lines.join(" ・ ") : t("体重を記録すると、平均と増減の傾きが出ます。");
     var wl = els["weight-list"];
     wl.innerHTML = "";
     Object.keys(state.weights).sort().reverse().slice(0, 7).forEach(function (date) {
@@ -1845,15 +1885,15 @@
     list.innerHTML = "";
     els["workout-empty"].classList.toggle("hidden", items.length > 0);
     items.forEach(function (item, i) {
-      var detail = item.muscle + " ・ " + fmt(item.kg, 1) + "kg × " + item.reps + "回 × " + item.sets + "セット ・ 推定1RM " +
-        fmt(estimated1RM(item), 1) + "kg";
+      var detail = t("{muscle} ・ {kg}kg × {reps}回 × {sets}セット ・ 推定1RM {rm}kg",
+        { muscle: t(item.muscle), kg: fmt(item.kg, 1), reps: item.reps, sets: item.sets, rm: fmt(estimated1RM(item), 1) });
       var prev = previousSession(item.name, today);
       if (prev) {
-        detail += " ・ 前回（" + shortDate(prev.date) + "）" + fmt(prev.item.kg, 1) + "kg × " +
-          prev.item.reps + "回 × " + prev.item.sets + "セット";
+        detail += " ・ " + t("前回（{date}）{kg}kg × {reps}回 × {sets}セット",
+          { date: shortDate(prev.date), kg: fmt(prev.item.kg, 1), reps: prev.item.reps, sets: prev.item.sets });
       }
       var best = previousBest(item.name, today, i);
-      var title = item.name + (best !== null && estimated1RM(item) > best ? "　★ 自己ベスト更新" : "");
+      var title = item.name + (best !== null && estimated1RM(item) > best ? "　" + t("★ 自己ベスト更新") : "");
       list.appendChild(listItem(title, detail, function () {
         state.workouts[today] = (state.workouts[today] || []).filter(function (x) { return x.id !== item.id; });
         if (!state.workouts[today].length) delete state.workouts[today];
@@ -1877,7 +1917,7 @@
       row.className = "volume-row";
       var label = document.createElement("span");
       label.className = "volume-label";
-      label.textContent = m;
+      label.textContent = t(m);
       var track = document.createElement("span");
       track.className = "volume-track";
       var bar = document.createElement("span");
@@ -1886,7 +1926,7 @@
       track.appendChild(bar);
       var num = document.createElement("span");
       num.className = "volume-num";
-      num.textContent = vol[m] + "セット";
+      num.textContent = t("{n}セット", { n: vol[m] });
       row.appendChild(label);
       row.appendChild(track);
       row.appendChild(num);
@@ -1905,40 +1945,44 @@
     var out = els["plan-result"];
     out.innerHTML = "";
     if (!r.ready) {
-      out.textContent = "先に「1日の目標を設定する」の「目標の自動計算」で、性別・年齢・身長・活動レベルを入れてください。";
+      out.textContent = t("先に「1日の目標を設定する」の「目標の自動計算」で、性別・年齢・身長・活動レベルを入れてください。");
       return;
     }
     var rows = [
-      "体重 " + fmt(r.weight, 1) + "kg ・ 基礎代謝 約" + fmt(r.bmr, 0) + "kcal",
+      t("体重 {w}kg ・ 基礎代謝 約{bmr}kcal", { w: fmt(r.weight, 1), bmr: fmt(r.bmr, 0) }),
       r.source === "actual"
-        ? "1日の消費（実績から逆算） 約" + fmt(r.tdee, 0) + "kcal ・ 直近" + r.intakeDays + "日の平均摂取 " +
-          fmt(r.avgIntake, 0) + "kcal"
-        : "1日の消費（式による推定） 約" + fmt(r.tdee, 0) + "kcal ・ 食事" + MIN_INTAKE_DAYS + "日分と体重" +
-          MIN_WEIGH_INS + "回分（1週間以上）がたまると、実績から計算します（今は食事" + r.intakeDays +
-          "日・体重" + r.trend.weighIns + "回）"
+        ? t("1日の消費（実績から逆算） 約{tdee}kcal ・ 直近{d}日の平均摂取 {avg}kcal",
+          { tdee: fmt(r.tdee, 0), d: r.intakeDays, avg: fmt(r.avgIntake, 0) })
+        : t("1日の消費（式による推定） 約{tdee}kcal ・ 食事{md}日分と体重{mw}回分（1週間以上）がたまると、実績から計算します（今は食事{d}日・体重{w}回）",
+          { tdee: fmt(r.tdee, 0), md: MIN_INTAKE_DAYS, mw: MIN_WEIGH_INS, d: r.intakeDays, w: r.trend.weighIns })
     ];
     if (state.plan) {
+      var planVars = { w: fmt(state.plan.goalWeight, 1), d: r.daysLeft, n: signed(r.plannedWeekly, 2) };
       rows.push(r.daysLeft > 0
-        ? "目標 " + fmt(state.plan.goalWeight, 1) + "kg まで あと" + r.daysLeft + "日 ・ 計画 週" +
-          signed(r.plannedWeekly, 2) + "kg" + (r.limited ? "（体に無理のない速さに抑えています）" : "")
-        : "期限を過ぎたので、今の体重を保つカロリーにしています。");
+        ? (r.limited
+          ? t("目標 {w}kg まで あと{d}日 ・ 計画 週{n}kg（体に無理のない速さに抑えています）", planVars)
+          : t("目標 {w}kg まで あと{d}日 ・ 計画 週{n}kg", planVars))
+        : t("期限を過ぎたので、今の体重を保つカロリーにしています。"));
       if (state.plan.cycle) {
         rows.push(r.dayType === null
           ? (r.cycleDays >= 7
-            ? "トレ日と休養日の切り替え：毎日筋トレしているので、切り替えずに平均のカロリーにしています。"
+            ? t("トレ日と休養日の切り替え：毎日筋トレしているので、切り替えずに平均のカロリーにしています。")
             : r.cycleDays > 0
-              ? "トレ日と休養日の切り替え：目標が基礎代謝に近く、休養日を減らす余裕がないので切り替えていません。"
-              : "トレ日と休養日の切り替え：直近4週間の筋トレの記録（週1〜6日）がたまると始まります（今は週0日）。")
+              ? t("トレ日と休養日の切り替え：目標が基礎代謝に近く、休養日を減らす余裕がないので切り替えていません。")
+              : t("トレ日と休養日の切り替え：直近4週間の筋トレの記録（週1〜6日）がたまると始まります（今は週0日）。"))
           : (r.dayType === "training"
-            ? "今日はトレ日なので、平均より多めにしています（平均 " + fmt(r.baseKcal, 0) + "kcal、週" + r.cycleDays + "日トレ）。"
-            : "今日は休養日なので、平均より少なめにしています（平均 " + fmt(r.baseKcal, 0) + "kcal、週" + r.cycleDays +
-              "日トレ）。筋トレを記録すると、トレ日のカロリーに変わります。"));
+            ? t("今日はトレ日なので、平均より多めにしています（平均 {k}kcal、週{n}日トレ）。",
+              { k: fmt(r.baseKcal, 0), n: r.cycleDays })
+            : t("今日は休養日なので、平均より少なめにしています（平均 {k}kcal、週{n}日トレ）。筋トレを記録すると、トレ日のカロリーに変わります。",
+              { k: fmt(r.baseKcal, 0), n: r.cycleDays })));
       }
-      rows.push("今日の目標 " + fmt(r.kcal, 0) + "kcal ・ P " + fmt(r.p, 0) + "g ・ F " + fmt(r.f, 0) +
-        "g ・ C " + fmt(r.c, 0) + "g" + (r.floored ? "（基礎代謝を下回らないようにしています）" : ""));
-      rows.push("目標は計画から毎日自動で決まります。手で決めたいときは「計画をやめる」を押してください。");
+      var goalVars = { kcal: fmt(r.kcal, 0), p: fmt(r.p, 0), f: fmt(r.f, 0), c: fmt(r.c, 0) };
+      rows.push(r.floored
+        ? t("今日の目標 {kcal}kcal ・ P {p}g ・ F {f}g ・ C {c}g（基礎代謝を下回らないようにしています）", goalVars)
+        : t("今日の目標 {kcal}kcal ・ P {p}g ・ F {f}g ・ C {c}g", goalVars));
+      rows.push(t("目標は計画から毎日自動で決まります。手で決めたいときは「計画をやめる」を押してください。"));
     } else {
-      rows.push("目標体重と期限を入れると、毎日の目標カロリーとPFCを自動で決めます。");
+      rows.push(t("目標体重と期限を入れると、毎日の目標カロリーとPFCを自動で決めます。"));
     }
     rows.forEach(function (text) {
       var p = document.createElement("p");
@@ -1967,7 +2011,7 @@
     function px(x) { return L + (W - L - R) * x / (data.days - 1); }
     function py(y) { return T + (H - T - B) * (data.yMax - y) / (data.yMax - data.yMin); }
     var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
-      "aria-label": "直近" + data.days + "日の体重のグラフ", "class": "weight-svg" });
+      "aria-label": t("直近{n}日の体重のグラフ", { n: data.days }), "class": "weight-svg" });
     [data.yMin, (data.yMin + data.yMax) / 2, data.yMax].forEach(function (y) {
       svg.appendChild(svgEl("line", { x1: L, x2: W - R, y1: py(y), y2: py(y), stroke: "#e8e0d5", "stroke-width": 1 }));
       var t = svgEl("text", { x: L - 4, y: py(y) + 4, "text-anchor": "end", "font-size": 10, fill: "#6b6259" });
@@ -2002,10 +2046,10 @@
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "chip";
-      btn.setAttribute("aria-label", food.name + " " + fmt(x.grams, 0) + "g を追加");
+      btn.setAttribute("aria-label", t("{food} {n}g を追加", { food: foodLabel(food), n: fmt(x.grams, 0) }));
       var name = document.createElement("span");
       name.className = "chip-name";
-      name.textContent = food.name;
+      name.textContent = foodLabel(food);
       var g = document.createElement("span");
       g.className = "chip-grams";
       g.textContent = fmt(x.grams, 0) + "g";
@@ -2026,8 +2070,9 @@
     copy.classList.toggle("hidden", !usable.length);
     if (usable.length) {
       var yesterday = addDays(todayString(), -1);
-      copy.textContent = (last.date === yesterday ? "昨日" : formatDateLabel(last.date)) +
-        "と同じものを追加する（" + usable.length + "品）";
+      copy.textContent = last.date === yesterday
+        ? t("昨日と同じものを追加する（{n}品）", { n: usable.length })
+        : t("{date}と同じものを追加する（{n}品）", { date: formatDateLabel(last.date), n: usable.length });
     }
   }
 
@@ -2045,12 +2090,13 @@
         var v = entryValues(it);
         if (v) kcal += v.kcal; else missing += 1;
       });
-      var detail = set.items.length + "品 ・ " + fmt(kcal, 0) + "kcal" +
-        (missing ? "（消した食品" + missing + "品は追加されません）" : "");
+      var detail = missing
+        ? t("{n}品 ・ {kcal}kcal（消した食品{m}品は追加されません）", { n: set.items.length, kcal: fmt(kcal, 0), m: missing })
+        : t("{n}品 ・ {kcal}kcal", { n: set.items.length, kcal: fmt(kcal, 0) });
       var add = document.createElement("button");
       add.type = "button";
       add.className = "entry-add";
-      add.textContent = "追加";
+      add.textContent = t("追加");
       add.addEventListener("click", function () {
         var added = 0;
         set.items.forEach(function (it) {
@@ -2059,11 +2105,11 @@
         saveState();
         renderAll();
         els["set-message"].textContent = added
-          ? "「" + set.name + "」を今日の記録に追加しました（" + added + "品）。"
-          : "「" + set.name + "」の食品はすべて消されているため、追加できませんでした。";
+          ? t("「{name}」を今日の記録に追加しました（{n}品）。", { name: set.name, n: added })
+          : t("「{name}」の食品はすべて消されているため、追加できませんでした。", { name: set.name });
       });
       list.appendChild(listItem(set.name, detail, function () {
-        if (!window.confirm("セット「" + set.name + "」を消しますか？")) return;
+        if (!window.confirm(t("セット「{name}」を消しますか？", { name: set.name }))) return;
         state.mealSets = state.mealSets.filter(function (x) { return x.id !== set.id; });
         saveState();
         renderSets();
@@ -2087,7 +2133,7 @@
     sc.items.forEach(function (x) {
       var li = document.createElement("li");
       li.className = x.got ? "got" : "";
-      li.textContent = (x.got ? "✓ " : "・ ") + x.label + "（" + x.pts + "点）";
+      li.textContent = (x.got ? "✓ " : "・ ") + t("{label}（{n}点）", { label: t(x.label), n: x.pts });
       ul.appendChild(li);
     });
   }
@@ -2161,7 +2207,7 @@
 
   document.getElementById("reset-button").addEventListener("click", function () {
     if (state.entries.length === 0) return;
-    if (!window.confirm("今日の記録をすべて消しますか？")) return;
+    if (!window.confirm(t("今日の記録をすべて消しますか？"))) return;
     state.entries = [];
     saveState();
     renderSummary();
@@ -2217,7 +2263,7 @@
           els["pro-message"].textContent = "";
           activateLicense(license);
         } else {
-          els["pro-message"].textContent = "ライセンスキーが正しくありません。コピーしたキー全体を貼り付けてください。";
+          els["pro-message"].textContent = t("ライセンスキーが正しくありません。コピーしたキー全体を貼り付けてください。");
         }
       });
       return;
@@ -2229,15 +2275,15 @@
         saveState();
         renderAll();
       } else {
-        els["pro-message"].textContent = "コードが正しくありません。もう一度お確かめください。";
+        els["pro-message"].textContent = t("コードが正しくありません。もう一度お確かめください。");
       }
     });
   });
 
   document.getElementById("pro-disable-button").addEventListener("click", function () {
     var msg = state.license
-      ? "Proをやめて、無料版に戻しますか？（記録データは消えません）\nライセンスキーも消えるので、再び使うときのためにキーを控えておいてください。"
-      : "Proをやめて、無料版に戻しますか？（記録データは消えません）";
+      ? t("Proをやめて、無料版に戻しますか？（記録データは消えません）\nライセンスキーも消えるので、再び使うときのためにキーを控えておいてください。")
+      : t("Proをやめて、無料版に戻しますか？（記録データは消えません）");
     if (!window.confirm(msg)) return;
     state.pro = false;
     state.license = null;
@@ -2256,7 +2302,7 @@
     });
     if (!profile) {
       els["auto-calc-result"].textContent =
-        "入力を確認してください（年齢10〜100、身長100〜250cm、体重20〜300kg）。";
+        t("入力を確認してください（年齢10〜100、身長100〜250cm、体重20〜300kg）。");
       return;
     }
     var r = computeAutoTargets(profile);
@@ -2268,16 +2314,15 @@
       saveState();
       renderAll();
       els["auto-calc-result"].textContent =
-        "プロフィールを保存しました。計画があるので、今日の目標は「からだの記録」の計画から決めています。";
+        t("プロフィールを保存しました。計画があるので、今日の目標は「からだの記録」の計画から決めています。");
       return;
     }
     renderSummary();
     renderTargets();
     renderChart();
     els["auto-calc-result"].textContent =
-      "基礎代謝 約" + fmt(r.bmr, 0) + "kcal ・ 1日の消費目安 約" + fmt(r.tdee, 0) +
-      "kcal → 目標 " + fmt(r.kcal, 0) + "kcal（P " + fmt(r.p, 0) + "g ・ F " +
-      fmt(r.f, 0) + "g ・ C " + fmt(r.c, 0) + "g）を設定しました。";
+      t("基礎代謝 約{bmr}kcal ・ 1日の消費目安 約{tdee}kcal → 目標 {kcal}kcal（P {p}g ・ F {f}g ・ C {c}g）を設定しました。",
+        { bmr: fmt(r.bmr, 0), tdee: fmt(r.tdee, 0), kcal: fmt(r.kcal, 0), p: fmt(r.p, 0), f: fmt(r.f, 0), c: fmt(r.c, 0) });
   });
 
   document.getElementById("today-csv-button").addEventListener("click", function () {
@@ -2313,10 +2358,10 @@
     e.preventDefault();
     if (!state.pro) return;
     var name = String(els["set-name"].value || "").trim().slice(0, 30);
-    if (!name) { els["set-message"].textContent = "セットの名前を入れてください（例：朝ごはん）。"; return; }
-    if (!state.entries.length) { els["set-message"].textContent = "今日の記録が空です。先に食品を追加してください。"; return; }
+    if (!name) { els["set-message"].textContent = t("セットの名前を入れてください（例：朝ごはん）。"); return; }
+    if (!state.entries.length) { els["set-message"].textContent = t("今日の記録が空です。先に食品を追加してください。"); return; }
     if (state.mealSets.length >= MAX_MEAL_SETS) {
-      els["set-message"].textContent = "セットは" + MAX_MEAL_SETS + "個まで登録できます。";
+      els["set-message"].textContent = t("セットは{n}個まで登録できます。", { n: MAX_MEAL_SETS });
       return;
     }
     state.mealSets.push({
@@ -2324,8 +2369,10 @@
       items: state.entries.slice(0, MAX_SET_ITEMS).map(function (x) { return { foodId: x.foodId, grams: x.grams }; })
     });
     els["set-name"].value = "";
-    els["set-message"].textContent = "「" + name + "」を登録しました。次からはワンタップで追加できます。" +
-      (state.entries.length > MAX_SET_ITEMS ? "（1つのセットには先頭の" + MAX_SET_ITEMS + "品までが入ります）" : "");
+    els["set-message"].textContent = state.entries.length > MAX_SET_ITEMS
+      ? t("「{name}」を登録しました。次からはワンタップで追加できます。（1つのセットには先頭の{n}品までが入ります）",
+        { name: name, n: MAX_SET_ITEMS })
+      : t("「{name}」を登録しました。次からはワンタップで追加できます。", { name: name });
     saveState();
     renderSets();
   });
@@ -2353,12 +2400,12 @@
       muscle: els["workout-muscle"].value
     });
     if (!item) {
-      els["workout-message"].textContent = "種目名・重量（0〜1000kg）・回数・セット数（整数）を確かめてください。";
+      els["workout-message"].textContent = t("種目名・重量（0〜1000kg）・回数・セット数（整数）を確かめてください。");
       return;
     }
     var items = state.workouts[today] || [];
     if (items.length >= MAX_WORKOUT_ITEMS) {
-      els["workout-message"].textContent = "1日に記録できるのは" + MAX_WORKOUT_ITEMS + "件までです。";
+      els["workout-message"].textContent = t("1日に記録できるのは{n}件までです。", { n: MAX_WORKOUT_ITEMS });
       return;
     }
     var best = previousBest(item.name, today, items.length);
@@ -2366,7 +2413,7 @@
     state.workouts[today] = items;
     applyPlanTargets();
     els["workout-message"].textContent = best !== null && estimated1RM(item) > best
-      ? "★ " + item.name + "の自己ベスト（推定1RM " + fmt(estimated1RM(item), 1) + "kg）を更新しました！" : "";
+      ? t("★ {name}の自己ベスト（推定1RM {rm}kg）を更新しました！", { name: item.name, rm: fmt(estimated1RM(item), 1) }) : "";
     saveState();
     renderAll();
   });
@@ -2380,7 +2427,7 @@
       cycle: !!els["plan-cycle"].checked
     });
     if (!plan || plan.goalDate <= todayString()) {
-      els["plan-message"].textContent = "目標体重（20〜300kg）と、明日以降の期限を入れてください。";
+      els["plan-message"].textContent = t("目標体重（20〜300kg）と、明日以降の期限を入れてください。");
       return;
     }
     els["plan-message"].textContent = "";
@@ -2399,7 +2446,7 @@
   });
 
   els["plan-clear-button"].addEventListener("click", function () {
-    if (!window.confirm("計画をやめますか？（今の目標値はそのまま残り、手で変えられるようになります）")) return;
+    if (!window.confirm(t("計画をやめますか？（今の目標値はそのまま残り、手で変えられるようになります）"))) return;
     state.plan = null;
     saveState();
     renderAll();
@@ -2417,7 +2464,7 @@
     var file = e.target.files && e.target.files[0];
     if (!file || typeof file.text !== "function") return;
     if (file.size > 5 * 1024 * 1024) {
-      els["backup-message"].textContent = "ファイルが大きすぎます（5MBまで）。";
+      els["backup-message"].textContent = t("ファイルが大きすぎます（5MBまで）。");
       return;
     }
     file.text().then(function (text) {
@@ -2425,7 +2472,7 @@
       if (!parsed || parsed.app !== "pfc-calculator" || !parsed.data || typeof parsed.data !== "object") {
         throw new Error("format");
       }
-      if (!window.confirm("バックアップを読み込みますか？ この端末の今の記録は、バックアップの内容で置き換わります。")) return;
+      if (!window.confirm(t("バックアップを読み込みますか？ この端末の今の記録は、バックアップの内容で置き換わります。"))) return;
       var next = sanitizeState(parsed.data);
       // Pro かどうかはバックアップの言い分ではなく、ライセンスキーの署名で決める。
       // 署名が確かめられなければ、この端末の今の Pro・キー・支払いの確認待ちをそのまま残す。
@@ -2447,10 +2494,10 @@
         applyPlanTargets();
         saveState();
         renderAll();
-        els["backup-message"].textContent = "バックアップを読み込みました。";
+        els["backup-message"].textContent = t("バックアップを読み込みました。");
       });
     }).catch(function () {
-      els["backup-message"].textContent = "このファイルは読み込めませんでした。このアプリで書き出したバックアップを選んでください。";
+      els["backup-message"].textContent = t("このファイルは読み込めませんでした。このアプリで書き出したバックアップを選んでください。");
     });
     e.target.value = "";
   });
@@ -2461,7 +2508,7 @@
       if (!state.license) return;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(state.license).then(function () {
-          copyButton.textContent = "コピーしました";
+          copyButton.textContent = t("コピーしました");
         }, function () {
           els["license-key"].select();
         });
@@ -2541,12 +2588,20 @@
     if (tab) tab.click();
     document.getElementById("workout-name").value = name;
     els["workout-muscle"].value = MUSCLES.indexOf(muscle) !== -1 ? muscle : "";
-    els["workout-message"].textContent = "「" + name + "」を入れました。重量・回数・セットを入れて追加してください。";
+    els["workout-message"].textContent = t("「{name}」を入れました。重量・回数・セットを入れて追加してください。", { name: name });
     var kg = document.getElementById("workout-kg");
     if (kg.focus) kg.focus();
   })();
 
   if (els["today-label"]) els["today-label"].textContent = formatDateLabel(todayString());
+
+  // 言語を切り替えたら、画面を描き直す（起動時に一度だけ入れている日付などもここで入れ直す）。
+  if (I18N) {
+    I18N.onChange(function () {
+      renderAll();
+      if (els["today-label"]) els["today-label"].textContent = formatDateLabel(todayString());
+    });
+  }
 
   // ホーム画面に追加したときにオフラインでも開けるよう、Service Worker を登録する（https のときだけ）。
   if (typeof navigator !== "undefined" && navigator.serviceWorker &&
@@ -2573,7 +2628,7 @@
     if (sessionId && SESSION_ID_RE.test(sessionId)) {
       if (state.license) {
         els["pro-message"].textContent =
-          "この端末ではすでに購入済みのライセンスキーで Pro が有効です。";
+          t("この端末ではすでに購入済みのライセンスキーで Pro が有効です。");
       } else {
         state.pendingSession = sessionId;
         saveState();

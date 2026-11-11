@@ -12,6 +12,7 @@ const foodsCode = fs.readFileSync(path.join(ROOT, "foods.js"), "utf8");
 const offFoodsCode = fs.readFileSync(path.join(ROOT, "off-foods.js"), "utf8");
 const offMoreCode = fs.readFileSync(path.join(ROOT, "off-foods-more.js"), "utf8");
 const appCode = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
+const i18nCode = fs.readFileSync(path.join(ROOT, "i18n.js"), "utf8");
 
 // ---------- 簡易DOMスタブ ----------
 class El {
@@ -163,6 +164,7 @@ function launch(storage, opts) {
   vm.createContext(sandbox);
   vm.runInContext(foodsCode, sandbox);
   vm.runInContext(offFoodsCode, sandbox);
+  if (opts.i18n) vm.runInContext(i18nCode, sandbox);
   vm.runInContext(appCode, sandbox);
   return { document: documentStub, storage, replaced, sandbox };
 }
@@ -1387,6 +1389,89 @@ function readProCode() {
     check("「わかりました」で閉じる", byId(env, "welcome").classList.contains("hidden"));
     const again = launch(st);
     check("閉じたら次からは出さない", byId(again, "welcome").classList.contains("hidden"));
+  }
+
+  // ============ 表示言語（English・中文） ============
+  console.log("[表示言語]");
+  {
+    // i18n.js だけを最小のスタブで読み、辞書を取り出す。
+    function loadI18n(lang) {
+      const store = makeLocalStorage();
+      if (lang) store.setItem("pfc-calculator-lang", lang);
+      const win = {};
+      const sb = { window: win, document: {}, localStorage: store };
+      vm.createContext(sb);
+      vm.runInContext(i18nCode, sb);
+      return win.PFC_I18N;
+    }
+    const JP = /[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/;
+    const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+
+    // (a) 辞書がそろっているか：index.html の日本語の断片と属性、app.js の t("…") の文
+    const body = html.slice(html.indexOf("<body"))
+      .replace(/<!--[\s\S]*?-->/g, "").replace(/<script[\s\S]*?<\/script>/g, "")
+      .replace(/<div[^>]*translate="no"[\s\S]*?<\/div>/g, "");
+    const wanted = new Set();
+    body.split(/<[^>]*>/).forEach((frag) => { const k = frag.trim(); if (k && JP.test(k)) wanted.add(k); });
+    const attrRe = /\s(placeholder|aria-label|title|label)="([^"]*)"/g;
+    let am;
+    while ((am = attrRe.exec(body))) { if (JP.test(am[2])) wanted.add(am[2].trim()); }
+    const tRe = /\bt\(\s*"((?:[^"\\]|\\.)*)"/g;
+    let tm;
+    while ((tm = tRe.exec(appCode))) wanted.add(JSON.parse('"' + tm[1] + '"'));
+    // <head> の文言、内部の値を表示するときに t() に通す文言（カテゴリ・スコアの項目名）
+    wanted.add(/<title>([^<]*)<\/title>/.exec(html)[1]);
+    wanted.add(/<meta name="description" content="([^"]*)"/.exec(html)[1]);
+    const lit = /\b(?:label|short|category): "([^"]+)"/g;
+    let lm;
+    while ((lm = lit.exec(appCode))) wanted.add(lm[1]);
+    const foodsAll = fs.readFileSync(path.join(ROOT, "foods.js"), "utf8");
+    const catRe = /"category": "([^"]+)"/g;
+    let cm;
+    while ((cm = catRe.exec(foodsAll))) wanted.add(cm[1]);
+    wanted.add("市販品");
+    const dict = loadI18n()._dict;
+    const missing = [];
+    ["en", "zh"].forEach((l) => wanted.forEach((k) => { if (!Object.prototype.hasOwnProperty.call(dict[l], k)) missing.push(l + ": " + k); }));
+    if (missing.length) console.log(missing.join("\n"));
+    check("辞書に英語・中国語の訳がそろっている（" + wanted.size + "文、不足" + missing.length + "）", missing.length === 0);
+
+    // (b) t() の動き
+    const en = loadI18n("en");
+    check("英語: 穴埋め入りの文が訳される", en.t("あと {n} kcal", { n: "1,790" }) === "1,790 kcal left");
+    check("辞書に無い文は日本語のまま", en.t("辞書に無い文 {n}", { n: 3 }) === "辞書に無い文 3");
+    check("日本語に設定すると元の文のまま", loadI18n("ja").t("あと {n} kcal", { n: "1,790" }) === "あと 1,790 kcal");
+    check("中国語に切り替えられ、保存される", (() => { const z = loadI18n("zh"); return z.t("今日") === "今天" && z.lang === "zh"; })());
+
+    // (c) よく使う食品には英語・中国語の名前がある
+    const common = vm.runInNewContext(foodsAll + "; window.FOODS", { window: {} }).filter((f) => f.common);
+    const names = en._foodNames;
+    check("よく使う食品 " + common.length + " 品すべてに英語・中国語の名前がある",
+      common.length === 106 && common.every((f) => names[f.id] && names[f.id][0] && names[f.id][1]));
+
+    // (d) アプリを英語で起動する
+    const st = makeLocalStorage();
+    st.setItem("pfc-calculator-lang", "en");
+    const envEn = launch(st, { i18n: true });
+    check("英語: 残りカロリーが英語", text(envEn, "remaining-kcal") === "2,000 kcal left");
+    check("英語: 次の一歩が英語", text(envEn, "check-next") === "Start by logging one thing you ate today.");
+    check("英語: 食品名が英語", byId(envEn, "food-select").children[0].children[0].textContent === "Rice (white, cooked)");
+    st.setItem("pfc-calculator-lang", "zh");
+    const envZh = launch(st, { i18n: true });
+    check("中国語: 残りカロリーが中国語", text(envZh, "remaining-kcal") === "还剩 2,000 kcal");
+    // 切り替えたら描き直される
+    envZh.sandbox.window.PFC_I18N.setLang("ja");
+    check("切り替えで日本語に描き直される", text(envZh, "remaining-kcal") === "あと 2,000 kcal");
+    envZh.sandbox.window.PFC_I18N.setLang("en");
+    check("切り替えで英語に描き直される", text(envZh, "remaining-kcal") === "2,000 kcal left");
+    // 英語・中国語の名前でも探せる
+    setVal(envEn, "food-search", "chicken breast");
+    byId(envEn, "food-search").dispatch("input");
+    const hitIds = byId(envEn, "food-select")._options().map((o) => o._value);
+    check("英語の名前で検索できる", hitIds.indexOf("chicken-breast") !== -1);
+    setVal(envZh, "food-search", "鸡胸");
+    byId(envZh, "food-search").dispatch("input");
+    check("中国語の名前で検索できる", byId(envZh, "food-select")._options().some((o) => o._value === "chicken-breast"));
   }
 
   console.log("");
