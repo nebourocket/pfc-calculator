@@ -1066,8 +1066,8 @@
       box.appendChild(div);
     });
     els["week-note"].textContent = cur.logged
-      ? "平均は記録した日だけで出しています。丸の塗りつぶしは目標内の日、輪は記録した日です。"
-      : "記録した日がたまると、ここに1週間のまとめが出ます。丸の塗りつぶしは目標内の日、輪は記録した日です。";
+      ? "◎は目標内の日、○は記録した日です。平均は記録した日だけで出しています。"
+      : "記録した日がたまると、ここに1週間のまとめが出ます。◎は目標内の日、○は記録した日です。";
   }
 
   // ---------- Pro：グラフ用データ ----------
@@ -1415,7 +1415,8 @@
    "food-search", "food-search-count", "sets-locked", "sets-area", "set-name",
    "set-list", "set-empty", "set-message",
    "weight-chart", "weight-chart-note", "plan-cycle", "workout-muscle", "volume-list",
-   "plate", "plate-p", "plate-f", "plate-c", "plate-target", "remaining-kcal", "today-label", "chart-tip",
+   "plate", "plate-p", "plate-f", "plate-c", "plate-rim", "plate-over",
+   "share-p", "share-f", "share-c", "nf-kcal", "remaining-kcal", "today-label", "chart-tip",
    "body-pro-area", "recent-area", "recent-list", "copy-last-button",
    "check-list", "check-next", "check-go", "streak-badge", "streak-text", "celebrate", "toast",
    "week-range", "week-days", "week-stats", "week-note"
@@ -1439,24 +1440,34 @@
     renderWeek();
   }
 
-  // 今日の皿：P×4・F×9・C×4 の kcal を左から積み上げ、目標の位置に点線を引く。
+  // 今日のお皿：外周は目標までのカロリー、内側は P×4・F×9・C×4 のエネルギー比。
   function renderPlate(t, targets) {
     if (!els["plate-p"]) return;
     var pk = t.p * 4, fk = t.f * 9, ck = t.c * 4;
-    var scale = Math.max(targets.kcal, pk + fk + ck, t.kcal, 1);
-    els["plate-p"].style.width = (pk / scale * 100).toFixed(2) + "%";
-    els["plate-f"].style.width = (fk / scale * 100).toFixed(2) + "%";
-    els["plate-c"].style.width = (ck / scale * 100).toFixed(2) + "%";
-    var target = els["plate-target"];
-    if (targets.kcal > 0) {
-      target.style.display = "block";
-      target.style.left = (targets.kcal / scale * 100).toFixed(2) + "%";
-    } else {
-      target.style.display = "none";
-    }
-    els["plate"].setAttribute("aria-label", "今日のカロリーの内訳：たんぱく質 " + fmt(pk, 0) + "kcal、脂質 " +
-      fmt(fk, 0) + "kcal、炭水化物 " + fmt(ck, 0) + "kcal" +
-      (targets.kcal > 0 ? "（目標 " + fmt(targets.kcal, 0) + "kcal）" : ""));
+    var sum = pk + fk + ck;
+    // 外周：目標までのカロリー（1周＝目標）。超えた分は内側の朱の輪で、もう1周まで描く。
+    var ratio = targets.kcal > 0 ? t.kcal / targets.kcal : 0;
+    // 長さ0の弧は、丸い線端だけが点になって見えるので隠す。
+    var arc = function (el, len, rest) {
+      el.setAttribute("stroke-dasharray", len.toFixed(2) + " " + rest.toFixed(2));
+      el.setAttribute("visibility", len > 0.05 ? "visible" : "hidden");
+    };
+    arc(els["plate-rim"], Math.min(1, ratio) * 100, 100);
+    arc(els["plate-over"], Math.min(1, Math.max(0, ratio - 1)) * 100, 100);
+    // 内側：P・F・C のエネルギー比。12時から時計回りに P → F → C の順で、すき間を少しあける。
+    var start = 0;
+    [["p", pk], ["f", fk], ["c", ck]].forEach(function (x) {
+      var share = sum > 0 ? x[1] / sum * 100 : 0;
+      var len = share > 2 ? share - 1 : share;
+      arc(els["plate-" + x[0]], len, 100 - len);
+      els["plate-" + x[0]].setAttribute("stroke-dashoffset", (-start).toFixed(2));
+      els["share-" + x[0]].textContent = Math.round(share);
+      start += share;
+    });
+    els["nf-kcal"].textContent = fmt(t.kcal, 0);
+    els["plate"].setAttribute("aria-label", "今日のお皿：" + fmt(t.kcal, 0) + "kcal" +
+      (targets.kcal > 0 ? "（目標 " + fmt(targets.kcal, 0) + "kcal の " + Math.round(ratio * 100) + "%）" : "") +
+      "。エネルギーの内訳はたんぱく質 " + fmt(pk, 0) + "kcal、脂質 " + fmt(fk, 0) + "kcal、炭水化物 " + fmt(ck, 0) + "kcal");
     var rem = els["remaining-kcal"];
     if (targets.kcal > 0) {
       var diff = targets.kcal - t.kcal;
