@@ -12,7 +12,8 @@
   var MAX_TARGET = 100000;           // 目標値の上限
   var HISTORY_DAYS_TO_SHOW = 7;      // 過去の記録の表示日数
   var HISTORY_MAX_DAYS = 90;         // 過去の記録の保存日数
-  var CHART_DAYS = 14;               // グラフに表示する日数
+  var CHART_DAYS = 30;               // カロリーのグラフに表示する日数（1か月）
+  var CHART_LABEL_EVERY = 5;         // グラフの日付は、今日から数えて何日おきに出すか
   var BODY_MAX_DAYS = 365;           // 体重・筋トレ・スコアの保存日数
   var KCAL_PER_KG = 7700;            // 体脂肪 1kg あたりのエネルギー（一般的な目安）
   var TDEE_WINDOW_DAYS = 14;         // 実績から TDEE を逆算するときに見る日数
@@ -1727,7 +1728,7 @@
       els["chart-tip"].textContent = formatDateLabel(d.date) + (d.isToday ? "（今日）" : "") + "　" +
         fmt(d.kcal, 0) + "kcal ・ P " + fmt(d.p, 0) + "g ・ F " + fmt(d.f, 0) + "g ・ C " + fmt(d.c, 0) + "g";
     }
-    data.forEach(function (d) {
+    data.forEach(function (d, i) {
       var col = document.createElement("div");
       col.className = "chart-col";
       col.tabIndex = 0;
@@ -1752,8 +1753,9 @@
       });
       col.appendChild(bar);
       plot.appendChild(col);
+      // 30本並ぶと日付が重なるので、今日から CHART_LABEL_EVERY 日おきにだけ出す（場所は空けておく）。
       var label = document.createElement("span");
-      label.textContent = d.label;
+      label.textContent = d.isToday ? "今日" : (data.length - 1 - i) % CHART_LABEL_EVERY === 0 ? d.label : "";
       labels.appendChild(label);
     });
     if (state.targets.kcal > 0) {

@@ -495,8 +495,8 @@ function readProCode() {
     submit(genv, "pro-form");
     await flush();
     const cols = byId(genv, "chart-plot").children.filter((c) => c.className === "chart-col");
-    check("グラフは14日分の列を表示する", cols.length === 14);
-    check("グラフの日付ラベルは14個", byId(genv, "chart-labels").children.length === 14);
+    check("グラフは30日分の列を表示する", cols.length === 30);
+    check("グラフの日付ラベルの場所は30個", byId(genv, "chart-labels").children.length === 30);
     const heights = cols.map((c) => c.children[0].style.height);
     check("1000kcalの日は目標2000比で50%の高さ", heights.includes("50%"));
     check("500kcalの日は25%の高さ", heights.includes("25%"));
@@ -1356,6 +1356,24 @@ function readProCode() {
       const empty = launch(makeLocalStorage());
       check("記録が無ければ平均は「—」", byId(empty, "week-stats").children[2].textContent.includes("—"));
     }
+  }
+
+
+  // ============ 1か月のグラフ（Pro。利用コードのファイルが無くても確かめる） ============
+  console.log("[1か月のグラフ]");
+  {
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const ago = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+    const st = makeLocalStorage();
+    st.setItem(STORAGE_KEY, JSON.stringify({ day: ago(0), pro: true, targets: { kcal: 2000, p: 100, f: 60, c: 250 },
+      history: { [ago(29)]: { kcal: 1000, p: 50, f: 30, c: 130 }, [ago(30)]: { kcal: 1500, p: 50, f: 30, c: 130 } } }));
+    const env = launch(st);
+    const cols = byId(env, "chart-plot").children.filter((c) => c.className === "chart-col");
+    check("グラフは30日分の列", cols.length === 30);
+    check("29日前の記録が左端に入る（30日前は入らない）", cols[0].children[0].style.height === "50%" &&
+      cols.every((c, i) => i === 0 || c.children[0].style.height === "0%"));
+    const labels = byId(env, "chart-labels").children.map((c) => c.textContent);
+    check("日付は今日から5日おきに6個", labels.filter(Boolean).length === 6 && labels[29] === "今日" && labels[24] !== "" && labels[28] === "");
   }
 
   console.log("");
