@@ -1376,6 +1376,19 @@ function readProCode() {
     check("日付は今日から5日おきに6個", labels.filter(Boolean).length === 6 && labels[29] === "今日" && labels[24] !== "" && labels[28] === "");
   }
 
+
+  // ============ はじめに（注意書き） ============
+  console.log("[はじめに]");
+  {
+    const st = makeLocalStorage();
+    const env = launch(st);
+    check("はじめては注意書きを出す", !byId(env, "welcome").classList.contains("hidden"));
+    byId(env, "welcome-close").click();
+    check("「わかりました」で閉じる", byId(env, "welcome").classList.contains("hidden"));
+    const again = launch(st);
+    check("閉じたら次からは出さない", byId(again, "welcome").classList.contains("hidden"));
+  }
+
   console.log("");
   console.log("結果: " + passed + " passed, " + failed + " failed");
   process.exit(failed > 0 ? 1 : 0);

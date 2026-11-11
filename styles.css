@@ -202,6 +202,13 @@ main {
 /* 隠す指定は、あとに書いた display の指定より常に勝たせる */
 .hidden { display: none !important; }
 
+/* ---------- はじめに（付箋に書いた注意書き） ---------- */
+.notice { background: var(--note); padding: 18px 18px 16px; border-radius: 2px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+.notice h2 { background: none; }
+.notice-list { margin: 12px 0 0; padding-left: 1.2em; font-size: 0.92rem; color: var(--ink); }
+.notice-list li { margin-bottom: 8px; }
+.notice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+
 /* ---------- 今日のお皿 ---------- */
 /* 右上にマスキングテープを1枚 */
 .hero::before {

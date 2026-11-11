@@ -6,6 +6,7 @@
   "use strict";
 
   var STORAGE_KEY = "pfc-calculator-v1";
+  var WELCOME_KEY = "pfc-calculator-welcome"; // 「はじめに」を閉じたかどうか（記録とは別に覚える）
   var FREE_CUSTOM_LIMIT = 5;         // 無料版の自由枠の登録上限
   var PRO_CUSTOM_LIMIT = 200;        // Pro の自由枠の登録上限（安全上限）
   var MAX_GRAMS = 5000;              // 1回の追加で受け付ける量の上限（g）
@@ -2474,6 +2475,20 @@
 
   // ---------- タブ ----------
   // どのタブを開いていたかは、その端末のブラウザにだけ覚えておく（使えなくても動く）。
+  // はじめての人向けの注意書き。「わかりました」を押したら、この端末では出さない。
+  (function setupWelcome() {
+    var box = document.getElementById("welcome");
+    var close = document.getElementById("welcome-close");
+    if (!box || !close) return;
+    var seen = false;
+    try { seen = localStorage.getItem(WELCOME_KEY) === "1"; } catch (e) { seen = false; }
+    box.classList.toggle("hidden", seen);
+    close.addEventListener("click", function () {
+      box.classList.add("hidden");
+      try { localStorage.setItem(WELCOME_KEY, "1"); } catch (e) { /* 覚えられなくても閉じる */ }
+    });
+  })();
+
   (function setupTabs() {
     if (!document.querySelectorAll) return;
     var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
