@@ -43,6 +43,8 @@ Whether you are cutting, maintaining or bulking, just open the page and use it.
 
 ## 🚀 How to use
 
+The Today tab shows a four-step guide (set your goal → log what you ate → check the plate → look back). Finished steps get a red circle, the next step is highlighted, and tapping a step takes you to the right place. Hide it with "Hide" and bring it back with the "How to use" button at the top.
+
 1. Pick a food, enter the amount (g) and press "Add".
 2. Today's total is shown for calories, protein, fat and carbs.
 3. Enter your daily targets to compare with progress bars.

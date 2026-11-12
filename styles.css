@@ -671,3 +671,115 @@ select:focus, input:focus { outline: 3px solid var(--brand); outline-offset: 0; 
 @media (prefers-reduced-motion: reduce) {
   .hanko { animation: none; }
 }
+
+/* ---------- 使い方ガイド（4つの手順） ----------
+   ノートの上に、鉛筆の点線でつないだ4つの駅を描く。できた駅は朱の丸、次の駅は蛍光ペン。 */
+.guide-open {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 3px 12px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.guide-open:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.guide-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.guide-close {
+  font: inherit; font-size: 0.85rem; color: var(--muted); background: none; border: none;
+  text-decoration: underline; cursor: pointer; padding: 4px;
+}
+.guide-steps {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  position: relative;
+}
+/* 駅と駅をつなぐ鉛筆の点線（丸の中心の高さ） */
+.guide-steps::before {
+  content: "";
+  position: absolute;
+  left: 12.5%;
+  right: 12.5%;
+  top: 27px;
+  border-top: 2px dashed var(--line);
+}
+.guide-step button {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: none;
+  width: 100%;
+  padding: 0 2px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  position: relative;
+}
+.guide-step button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+.guide-step svg {
+  width: 54px;
+  height: 54px;
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  position: relative;
+}
+.guide-step svg .fill { fill: currentColor; stroke: none; }
+.guide-num {
+  position: absolute;
+  top: -4px;
+  left: calc(50% - 36px);
+  z-index: 1;
+  font-family: var(--hand);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.guide-name { font-size: 0.82rem; font-weight: 700; line-height: 1.35; text-align: center; color: var(--muted); }
+/* 次にやる手順：紺の線と蛍光ペン */
+.guide-step.is-next svg { border: 2px solid var(--ink); stroke: var(--ink); color: var(--ink); }
+.guide-step.is-next .guide-name { color: var(--ink); background: linear-gradient(transparent 55%, var(--marker) 55%); }
+.guide-step.is-next .guide-num { color: var(--ink); }
+/* できた手順：先生の赤ペンの丸（形を少し崩す） */
+.guide-step.done svg {
+  border: 2px solid var(--shu);
+  border-radius: 52% 48% 55% 45% / 58% 46% 54% 42%;
+  stroke: var(--ink);
+  color: var(--ink);
+  transform: rotate(-3deg);
+}
+.guide-step.done .guide-name { color: var(--ink); }
+.guide-step.done .guide-num { color: var(--shu); }
+.guide-next {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-left: 3px solid var(--ink);
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+@media (min-width: 900px) {
+  .panel[data-panel="today"] > .guide { grid-column: 1 / -1; grid-row: 1; }
+  .panel[data-panel="today"].has-guide > .card-add { grid-row: 2 / span 3; }
+  .guide-name { font-size: 0.92rem; }
+}
+/* ガイドから移った先を一瞬だけ光らせる（押したことへの返事なので、ここだけ動かす） */
+.flash { animation: guide-flash 1.4s ease-out 1; }
+@keyframes guide-flash {
+  0%, 30% { box-shadow: 0 0 0 4px var(--marker); }
+  100% { box-shadow: 0 0 0 4px transparent; }
+}

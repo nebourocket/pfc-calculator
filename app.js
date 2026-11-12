@@ -19,6 +19,7 @@
 
   var STORAGE_KEY = "pfc-calculator-v1";
   var WELCOME_KEY = "pfc-calculator-welcome"; // 「はじめに」を閉じたかどうか（記録とは別に覚える）
+  var GUIDE_KEY = "pfc-calculator-guide";     // 使い方ガイドの進み具合（しまったか・押した手順。記録とは別に覚える）
   var FREE_CUSTOM_LIMIT = 5;         // 無料版の自由枠の登録上限
   var PRO_CUSTOM_LIMIT = 200;        // Pro の自由枠の登録上限（安全上限）
   var MAX_GRAMS = 5000;              // 1回の追加で受け付ける量の上限（g）
@@ -951,6 +952,100 @@
     toastTimer = setTimeout(function () { el.classList.add("hidden"); }, TOAST_MS);
   }
 
+  // ---------- 使い方ガイド（4つの手順） ----------
+  // 目標を決める → 食べたものを入れる → お皿で確かめる → 記録でふり返る。
+  // できたかどうかは記録から決め、決められないもの（見たかどうか）は押したときに覚える。
+  var GUIDE_STEPS = [
+    { key: "goal", name: "目標を決める", tab: "settings", target: "target-card",
+      desc: "「設定」で1日のカロリーとPFCの目標を決めます。わからなければ、そのまま（2000kcal）でも始められます。" },
+    { key: "eat", name: "食事を入れる", tab: "today", target: "add-card", focus: "food-search",
+      desc: "食品を探して量（g）を入れ、「追加する」を押します。よく食べるものは次から「最近食べたもの」で1回で入ります。" },
+    { key: "check", name: "お皿を見る", tab: "today", target: "summary",
+      desc: "お皿の外側の輪が目標までのカロリー、内側の色がPFCの割合です。目標に届くと、はんこが押されます。" },
+    { key: "log", name: "ふり返る", tab: "log", target: "week-card",
+      desc: "「記録」タブで、週のスタンプと過去の記録を見られます。毎日つけると連続記録が伸びます。" }
+  ];
+
+  // 保存できない端末でも、開いている間は手元の写しで動く。
+  var guideMem = null;
+  function loadGuide() {
+    if (guideMem) return guideMem;
+    var g = null;
+    try { g = JSON.parse(localStorage.getItem(GUIDE_KEY) || "null"); } catch (e) { g = null; }
+    guideMem = g && typeof g === "object" ? g : {};
+    return guideMem;
+  }
+  function saveGuide(g) {
+    guideMem = g;
+    try { localStorage.setItem(GUIDE_KEY, JSON.stringify(g)); } catch (e) { /* 覚えられなくても続ける */ }
+  }
+  function markGuide(key) {
+    var g = loadGuide();
+    if (g[key]) return;
+    g[key] = true;
+    saveGuide(g);
+    renderGuide();
+  }
+
+  function guideDone(key, g) {
+    if (key === "goal") {
+      return !!g.goal || !!state.profile || ["kcal", "p", "f", "c"].some(function (k) {
+        return state.targets[k] !== DEFAULT_TARGETS[k];
+      });
+    }
+    if (key === "eat") return state.entries.length > 0 || Object.keys(state.history).length > 0;
+    if (key === "check") {
+      return !!g.check || goalMet(totals(), state.targets) || Object.keys(state.history).some(function (d) {
+        return goalMet(state.history[d], state.targets);
+      });
+    }
+    return !!g[key];
+  }
+
+  function renderGuide() {
+    var box = els["guide"];
+    if (!box) return;
+    var g = loadGuide();
+    box.classList.toggle("hidden", !!g.closed);
+    // パソコンの2列で「食品を追加」をガイドの下へずらすための印
+    if (box.parentNode && box.parentNode.classList) box.parentNode.classList.toggle("has-guide", !g.closed);
+    var next = null;
+    GUIDE_STEPS.forEach(function (step) {
+      var li = document.getElementById("guide-step-" + step.key);
+      var done = guideDone(step.key, g);
+      if (!done && !next) next = step;
+      if (!li) return;
+      li.classList.toggle("done", done);
+      li.classList.toggle("is-next", !done && next === step);
+    });
+    var msg = next
+      ? t("次は「{name}」：{desc}", { name: t(next.name), desc: t(next.desc) })
+      : t("4つともできました。あとは毎日つけるだけです。この案内は「しまう」で閉じられます。");
+    // 読み上げが同じ文をくり返さないよう、変わったときだけ書き換える。
+    if (els["guide-next"].textContent !== msg) els["guide-next"].textContent = msg;
+  }
+
+  // 手順を押したら、そのタブへ移って、触る場所を少し光らせる。
+  function goGuideStep(key) {
+    var step = null;
+    GUIDE_STEPS.forEach(function (s) { if (s.key === key) step = s; });
+    if (!step) return;
+    // 目標は「そのまま」でもよいので、設定を開いたらできたことにする。お皿は見たらできたことにする。
+    if (key === "goal" || key === "check") markGuide(key);
+    showTab(step.tab, false);
+    var el = document.getElementById(step.target);
+    if (el) {
+      if (el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.remove("flash");
+      void el.offsetWidth; // 続けて押しても光り直すように、いったん描き直させる
+      el.classList.add("flash");
+    }
+    if (step.focus) {
+      var f = document.getElementById(step.focus);
+      if (f && f.focus) f.focus({ preventScroll: true });
+    }
+  }
+
   // 前回描いたときの様子。起動直後の描画ではお祝い・お知らせを出さず、操作で変わった瞬間だけ出す。
   var lastCheckin = null;
 
@@ -1464,7 +1559,7 @@
    "share-p", "share-f", "share-c", "nf-kcal", "remaining-kcal", "today-label", "chart-tip",
    "body-pro-area", "recent-area", "recent-list", "copy-last-button",
    "check-list", "check-next", "check-go", "streak-badge", "streak-text", "celebrate", "toast",
-   "week-range", "week-days", "week-stats", "week-note"
+   "week-range", "week-days", "week-stats", "week-note", "guide", "guide-next"
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   function renderSummary() {
@@ -1483,6 +1578,7 @@
     renderScore();
     renderCheckin();
     renderWeek();
+    renderGuide();
   }
 
   // 今日のお皿：外周は目標までのカロリー、内側は P×4・F×9・C×4 のエネルギー比。
@@ -2550,6 +2646,7 @@
     });
   })();
 
+  var showTab = function () {};
   (function setupTabs() {
     if (!document.querySelectorAll) return;
     var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
@@ -2563,7 +2660,9 @@
       });
       try { localStorage.setItem("pfc-calculator-tab", name); } catch (e) { /* 覚えられなくても続ける */ }
       if (focusTop && window.scrollTo) window.scrollTo(0, 0);
+      if (name === "log") markGuide("log");
     }
+    showTab = show;
     tabs.forEach(function (t) {
       t.addEventListener("click", function () { show(t.getAttribute("data-tab"), true); });
     });
@@ -2574,6 +2673,30 @@
     var saved = null;
     try { saved = localStorage.getItem("pfc-calculator-tab"); } catch (e) { saved = null; }
     show(saved || "today", false);
+  })();
+
+  (function setupGuide() {
+    if (!els["guide"]) return;
+    GUIDE_STEPS.forEach(function (step) {
+      document.getElementById("guide-go-" + step.key).addEventListener("click", function () { goGuideStep(step.key); });
+    });
+    document.getElementById("guide-close").addEventListener("click", function () {
+      var g = loadGuide();
+      g.closed = true;
+      saveGuide(g);
+      renderGuide();
+      var opener = document.getElementById("guide-open");
+      if (opener && opener.focus) opener.focus(); // 押したボタンが消えるので、フォーカスを「使い方」へ移す
+    });
+    // ヘッダーの「使い方」：しまったガイドをもう一度出して、今日タブの上へ戻る。
+    document.getElementById("guide-open").addEventListener("click", function () {
+      var g = loadGuide();
+      g.closed = false;
+      saveGuide(g);
+      renderGuide();
+      showTab("today", true);
+    });
+    renderGuide();
   })();
 
   // 筋トレ種目サーチ (exercise-search) から ?exercise=…&muscle=… 付きで開かれたら、

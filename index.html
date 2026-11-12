@@ -18,6 +18,7 @@
 <header class="header">
   <h1 class="brand"><span class="brand-mark" aria-hidden="true"><i class="dot-p"></i><i class="dot-f"></i><i class="dot-c"></i></span>PFCかんたん計算</h1>
   <p id="today-label" class="today-label"></p>
+  <button id="guide-open" class="guide-open" type="button">使い方</button>
   <div class="lang-switch" role="group" aria-label="Language / 言語" translate="no">
     <button type="button" data-lang="ja" aria-pressed="true">日本語</button>
     <button type="button" data-lang="en" aria-pressed="false">English</button>
@@ -34,6 +35,29 @@
 
 <main>
 <div class="panel" data-panel="today">
+  <!-- 使い方の道すじ：4つの手順を並べ、できた手順に朱の丸、次の手順に蛍光ペン。押すとその場所へ移る -->
+  <section class="card guide hidden" id="guide" aria-label="使い方">
+    <div class="guide-head">
+      <h2>使い方は4ステップ</h2>
+      <button id="guide-close" class="guide-close" type="button">しまう</button>
+    </div>
+    <ol class="guide-steps">
+      <li class="guide-step" id="guide-step-goal">
+        <button type="button" id="guide-go-goal"><span class="guide-num">1</span><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="6"/><circle cx="16" cy="16" r="1.6" class="fill"/></svg><span class="guide-name">目標を決める</span></button>
+      </li>
+      <li class="guide-step" id="guide-step-eat">
+        <button type="button" id="guide-go-eat"><span class="guide-num">2</span><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 15h22a11 9 0 0 1-22 0z"/><path d="M19 4l-4 9M25 5l-6 8"/></svg><span class="guide-name">食事を入れる</span></button>
+      </li>
+      <li class="guide-step" id="guide-step-check">
+        <button type="button" id="guide-go-check"><span class="guide-num">3</span><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 4a12 12 0 0 1 10.4 18"/><path d="M11 16.5l3.5 3.5 6.5-7"/></svg><span class="guide-name">お皿を見る</span></button>
+      </li>
+      <li class="guide-step" id="guide-step-log">
+        <button type="button" id="guide-go-log"><span class="guide-num">4</span><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="7" width="22" height="20" rx="2"/><path d="M5 13h22M11 4v6M21 4v6"/><path d="M10 22l4-4 3 2 5-5"/></svg><span class="guide-name">ふり返る</span></button>
+      </li>
+    </ol>
+    <p id="guide-next" class="guide-next" role="status"></p>
+  </section>
+
   <!-- はじめての人向けの注意書き（閉じたら、この端末では出さない） -->
   <section class="card notice hidden" id="welcome" aria-label="はじめに">
     <h2>はじめに読んでください</h2>
@@ -123,7 +147,7 @@
   </section>
 
   <!-- 食品を追加 -->
-  <section class="card sheet card-add" aria-label="食品を追加">
+  <section class="card sheet card-add" id="add-card" aria-label="食品を追加">
     <h2>食品を追加</h2>
     <form id="add-form">
       <label for="food-search">食品を探す</label>
@@ -189,7 +213,7 @@
 
 <div class="panel" data-panel="log" hidden>
   <!-- 週のふり返り（無料） -->
-  <section class="card" aria-label="週のふり返り">
+  <section class="card" id="week-card" aria-label="週のふり返り">
     <h2>週のふり返り</h2>
     <ol id="week-days" class="week-days" aria-label="直近7日の記録"></ol>
     <p id="week-range" class="week-range"></p>
@@ -310,7 +334,7 @@
 
 <div class="panel" data-panel="settings" hidden>
   <!-- 目標設定 -->
-  <section class="card" aria-label="目標設定">
+  <section class="card" id="target-card" aria-label="目標設定">
     <h2>1日の目標を設定する</h2>
     <form id="target-form">
       <div class="form-row">
