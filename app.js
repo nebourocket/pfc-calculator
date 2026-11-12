@@ -24,10 +24,11 @@
   var MAX_GRAMS = 5000;              // 1回の追加で受け付ける量の上限（g）
   var MAX_TARGET = 100000;           // 目標値の上限
   var HISTORY_DAYS_TO_SHOW = 7;      // 過去の記録の表示日数
-  var HISTORY_MAX_DAYS = 90;         // 過去の記録の保存日数
+  var HISTORY_MAX_DAYS = 90;         // 過去の記録の保存日数（Pro は期限なし）
   var CHART_DAYS = 30;               // カロリーのグラフに表示する日数（1か月）
   var CHART_LABEL_EVERY = 5;         // グラフの日付は、今日から数えて何日おきに出すか
-  var BODY_MAX_DAYS = 365;           // 体重・筋トレ・スコアの保存日数
+  var BODY_MAX_DAYS = 365;           // 体重・筋トレ・スコアの保存日数（Pro は期限なし）
+  var STORAGE_WARN_CHARS = 4000000;  // 保存する文字数がこれを超えたら、バックアップを促す（ブラウザの上限はおよそ500万文字）
   var KCAL_PER_KG = 7700;            // 体脂肪 1kg あたりのエネルギー（一般的な目安）
   var TDEE_WINDOW_DAYS = 14;         // 実績から TDEE を逆算するときに見る日数
   var MIN_INTAKE_DAYS = 7;           // 逆算に必要な、食事を記録した日数
@@ -442,16 +443,29 @@
     }
   }
 
+  var storageWarned = false; // 保存の量のお知らせは、開いている間に1回だけ出す
   function saveState() {
     syncSavedFoods();
+    var json = JSON.stringify(state);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, json);
     } catch (e) {
-      // 保存に失敗しても、画面の表示は続ける。
+      // 保存に失敗しても、画面の表示は続ける。保存できる量がいっぱいのときは、バックアップを促す。
+      if (!storageWarned) {
+        storageWarned = true;
+        showToast(t("この端末に保存できる量がいっぱいで、記録を保存できませんでした。「設定」の「データのバックアップ」で書き出してください。"));
+      }
+      return;
+    }
+    if (json.length > STORAGE_WARN_CHARS && !storageWarned) {
+      storageWarned = true;
+      showToast(t("この端末に保存できる量の上限が近づいています。「設定」の「データのバックアップ」で書き出しておいてください。"));
     }
   }
 
   function trimHistory() {
+    // Pro は記録を期限なしで残す。
+    if (state.pro) return;
     var dates = Object.keys(state.history).sort();
     while (dates.length > HISTORY_MAX_DAYS) {
       delete state.history[dates.shift()];
@@ -929,7 +943,7 @@
 
   var toastTimer = null;
   function showToast(message) {
-    var el = els["toast"];
+    var el = els && els["toast"];
     if (!el) return;
     el.textContent = message;
     el.classList.remove("hidden");
@@ -2282,8 +2296,8 @@
 
   document.getElementById("pro-disable-button").addEventListener("click", function () {
     var msg = state.license
-      ? t("Proをやめて、無料版に戻しますか？（記録データは消えません）\nライセンスキーも消えるので、再び使うときのためにキーを控えておいてください。")
-      : t("Proをやめて、無料版に戻しますか？（記録データは消えません）");
+      ? t("Proをやめて、無料版に戻しますか？（記録は消えませんが、日付が変わると、90日より前の食事の記録と1年より前の体重・筋トレ・スコアは消えます）\nライセンスキーも消えるので、再び使うときのためにキーを控えておいてください。")
+      : t("Proをやめて、無料版に戻しますか？（記録は消えませんが、日付が変わると、90日より前の食事の記録と1年より前の体重・筋トレ・スコアは消えます）");
     if (!window.confirm(msg)) return;
     state.pro = false;
     state.license = null;
