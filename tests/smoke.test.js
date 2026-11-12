@@ -1379,6 +1379,37 @@ function readProCode() {
   }
 
 
+  // ============ 記録を残す期間（Pro は期限なし） ============
+  console.log("[記録を残す期間]");
+  {
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const ago = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+    const old = (pro) => {
+      const history = {};
+      for (let i = 2; i <= 120; i++) history[ago(i)] = { kcal: 1000, p: 50, f: 30, c: 130 };
+      return JSON.stringify({ day: ago(1), pro, targets: { kcal: 2000, p: 100, f: 60, c: 250 }, history,
+        weights: { [ago(400)]: 70, [ago(10)]: 69 } });
+    };
+    // 前の日のまま開く＝日付が変わったときの片付けが走る
+    const free = makeLocalStorage(); free.setItem(STORAGE_KEY, old(false)); launch(free);
+    const fs1 = JSON.parse(free.getItem(STORAGE_KEY));
+    check("無料版は食事の記録を90日分だけ残す", Object.keys(fs1.history).length === 90);
+    check("無料版は1年より前の体重を消す", fs1.weights[ago(400)] === undefined && fs1.weights[ago(10)] === 69);
+    const pro = makeLocalStorage(); pro.setItem(STORAGE_KEY, old(true)); launch(pro);
+    const ps = JSON.parse(pro.getItem(STORAGE_KEY));
+    check("Pro は食事の記録を消さない", Object.keys(ps.history).length === 119 && ps.history[ago(120)].kcal === 1000);
+    check("Pro は1年より前の体重も消さない", ps.weights[ago(400)] === 70);
+
+    // 保存できる量がいっぱいのときは、バックアップを促す
+    const full = makeLocalStorage();
+    const env = launch(full);
+    full.setItem = () => { throw new Error("QuotaExceededError"); };
+    setVal(env, "grams-input", "100");
+    submit(env, "add-form");
+    check("保存に失敗したらお知らせを出す", !byId(env, "toast").classList.contains("hidden") &&
+      text(env, "toast").indexOf("データのバックアップ") !== -1);
+  }
+
   // ============ はじめに（注意書き） ============
   console.log("[はじめに]");
   {
