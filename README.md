@@ -1,205 +1,212 @@
+English | [日本語](README.ja.md)
+
 <div align="center">
 
-# PFCかんたん計算ツール
+# PFC Calculator
 
-**食品を選んで、グラム数を入れるだけ。**<br>
-今日のカロリーと PFC（たんぱく質・脂質・炭水化物）が、ひと目でわかる。
+**Pick a food, enter the grams. That's it.**<br>
+See today's calories and PFC (protein, fat, carbs) at a glance.
 
-[**▶ 今すぐ使う（無料・登録不要）**](https://nebourocket.github.io/pfc-calculator/)
+[**▶ Use it now (free, no sign-up)**](https://nebourocket.github.io/pfc-calculator/)
 
-![無料](https://img.shields.io/badge/基本機能-無料-5a7d4a)
-![登録不要](https://img.shields.io/badge/アカウント-不要-5a7d4a)
-![端末内保存](https://img.shields.io/badge/記録-端末の中だけ-2b2620)
-![Pro](https://img.shields.io/badge/Pro-買い切り500円-c9a227)
-![依存なし](https://img.shields.io/badge/依存ライブラリ-ゼロ-2b2620)
+https://nebourocket.github.io/pfc-calculator/
+
+![Free](https://img.shields.io/badge/core%20features-free-5a7d4a)
+![No sign-up](https://img.shields.io/badge/account-not%20needed-5a7d4a)
+![On-device](https://img.shields.io/badge/records-stay%20on%20your%20device-2b2620)
+![Pro](https://img.shields.io/badge/Pro-one--time%20JPY%20500-c9a227)
+![No dependencies](https://img.shields.io/badge/dependencies-zero-2b2620)
 
 </div>
 
 ---
 
-減量でも、維持でも、増量でも。アプリのインストールも会員登録もいらず、ブラウザを開いたその場で使えます。記録はあなたの端末の中だけに残り、どこにも送られません。
+PFC Calculator is a free web app for tracking calories and PFC. There is nothing to install and no account to create, and it keeps working offline. Your records stay in your browser and are never sent anywhere. The interface is available in Japanese, English and Chinese. The food database comes from Japan's MEXT Standard Tables of Food Composition (2,500+ foods) and Open Food Facts.
 
-## ✨ 特長
+Whether you are cutting, maintaining or bulking, just open the page and use it.
 
-- **30 秒で使える** — 食品を選んで量を入れて「追加する」。それだけで今日の合計が出ます。
-- **目標との差がひと目でわかる** — 1日の目標を入れると、カロリーと PFC ごとに達成率のバーが伸びます。
-- **市販品も 29,283 品** — コンビニやスーパーの商品を、Open Food Facts のオープンデータから収録。よく使われる 5,000 品は最初から、残りは検索したときに読み込むので、起動は軽いまま。
-- **公式の成分表を全部収録** — 文部科学省「日本食品標準成分表（八訂）増補2023年」の **2,500品以上** をすべて収録。ひらがなでもカタカナでも、「ごはん」「とりむね」のようなふだんの言い方でも探せます。
-- **記録は外に出ない** — 保存先はブラウザの localStorage だけ。サーバーに記録を送る仕組みそのものがありません。
-- **軽い・速い** — HTML・CSS・JavaScript だけ。外部ライブラリも広告も解析タグもありません。
-- **見てわかる** — 方眼ノートに紺のペンでつける食事ノートの見た目です。今日の合計は「お皿」の図で、外周が目標までのカロリー、内側がたんぱく質（赤）・脂質（青）・炭水化物（黄）のエネルギー比。横には食品のパッケージと同じ形の「栄養成分表示」が並びます。1か月（30日間）のグラフも同じ色で内訳がわかります。スマホは下のタブ、パソコンは2列の画面で、ダークモードにも対応しています。
-- **体重と筋トレも無料で記録** — 毎日の体重（7日平均・週あたりの増減・30日のグラフ）と、筋トレの種目・重量・回数・セット（前回との比較、推定1RMの自己ベスト更新のお知らせ）を記録できます。
-- **種目を探してそのまま記録** — 筋トレ欄の「種目を探す」から [筋トレ種目サーチ](https://nebourocket.github.io/exercise-search/)（870 種目以上・日本語でも検索可）を開き、種目の「PFC計算ツールに記録」を押すと、種目名と部位が入った状態でこのアプリに戻ります（`?exercise=…&muscle=…`。値はすぐ URL から消します）。
-- **毎日続けたくなる** — 今日の画面の「今日のスタンプ」で、できたこと（食事・カロリー±10%・たんぱく質90%・体重・筋トレ）に朱の丸がつき、次にやることを1行で出します（例：「たんぱく質があと 19g（鶏むね肉なら約80g）」）。目標を満たした瞬間には1日1回「よくできました」のはんこが押され、食事を記録した日の連続日数と自己ベストの更新もお知らせします。記録タブの「週のふり返り」では、直近7日をスタンプカード（◎＝目標内、○＝記録した日）で見て、記録した日・目標内の日・平均カロリーとたんぱく質を、その前の週と比べられます。
-- **入力がすぐ終わる** — 「最近食べたもの」をワンタップで追加。前の日と同じものを食べた日は、ボタン1つでまとめて追加できます。
-- **日本語・English・中文** — 画面の右上のボタンで切り替えられます（最初はブラウザの言語に合わせます）。よく使う食品 106 品は英語・中国語の名前でも探せます。
-- **アプリのように使える** — スマホのブラウザで「ホーム画面に追加」すると、アプリのように開けます。電波がないところでも動きます。
+## ✨ Features
 
-## 🚀 使い方
+- **Ready in 30 seconds** — pick a food, enter an amount and press "Add". Today's total appears right away.
+- **See the gap to your goal at a glance** — set a daily target and progress bars fill up for calories and each of P, F and C.
+- **29,283 packaged products** — convenience-store and supermarket items from Open Food Facts open data. The 5,000 most popular load at startup and the rest load when you search, so startup stays light.
+- **The full official food composition table** — all **2,500+ foods** from MEXT's "Standard Tables of Food Composition in Japan (8th revision), 2023 Supplement". You can search in hiragana or katakana, or with everyday words such as "gohan" (rice) or "tori-mune" (chicken breast).
+- **Records never leave your device** — they are stored only in the browser's localStorage. The app has no way to send records to a server.
+- **Light and fast** — just HTML, CSS and JavaScript. No external libraries, ads or analytics tags.
+- **Easy to read** — it looks like a meal notebook written in navy ink on graph paper. Today's total is drawn as a "plate": the outer ring shows calories toward your target, and the inner part shows the energy ratio of protein (red), fat (blue) and carbs (yellow). Next to it is a "Nutrition Facts" panel shaped like the one on food packaging. A 1-month (30-day) chart uses the same colors for the breakdown. On phones there are tabs at the bottom, on desktops a two-column layout, and dark mode is supported.
+- **Weight and workouts, free** — log daily weight (7-day average, weekly change, 30-day chart) and workouts (exercise, weight, reps, sets, with a comparison to last time and a notice when you set a new estimated 1RM personal best).
+- **Find an exercise and log it in one tap** — "Find an exercise" in the workout section opens [Exercise Search](https://nebourocket.github.io/exercise-search/) (870+ exercises, searchable in Japanese too). Press "Log in PFC Calculator" on an exercise and you return to this app with the exercise name and muscle group filled in (`?exercise=…&muscle=…`; the values are removed from the URL immediately).
+- **Makes you want to keep going** — "Today's stamps" on the Today screen puts a red circle on what you have done (meals, calories within ±10%, protein at 90%, weight, workout) and shows the next step in one line (for example, "19 g more protein (about 80 g of chicken breast)"). The first time you hit your goal each day, a "well done" stamp is pressed, and the app also announces your meal-logging streak and new personal bests. The "Weekly review" on the Records tab shows the last 7 days as a stamp card (◎ = within target, ○ = logged) and compares days logged, days within target, and average calories and protein with the week before.
+- **Fast input** — add "recently eaten" foods in one tap. If you ate the same things as the day before, one button adds them all.
+- **日本語 / English / 中文** — switch with the button at the top right (it starts with your browser's language). 106 common foods can also be searched by their English and Chinese names.
+- **Works like an app** — use "Add to Home Screen" in your phone's browser to open it like an app. It works without a connection.
 
-1. 食品を選んで、量（g）を入れて「追加する」を押す。
-2. 今日の合計が、カロリー・たんぱく質・脂質・炭水化物ごとに表示される。
-3. 1日の目標値を入れると、達成率のバーで比べられる。
-4. 一覧にない食品は「自分の食品を登録する」から、100gあたりの値を入れて登録できる（無料版は5件まで）。
+## 🚀 How to use
 
-日付が変わると、前日までの合計は「過去の記録」に移り（直近7日分を表示）、今日の記録は空の状態から始まります。
+1. Pick a food, enter the amount (g) and press "Add".
+2. Today's total is shown for calories, protein, fat and carbs.
+3. Enter your daily targets to compare with progress bars.
+4. For foods not on the list, use "Register your own food" and enter the values per 100 g (the free version allows 5).
 
-## 💎 Pro（買い切り500円）
+When the date changes, the previous day's totals move to "Past records" (the last 7 days are shown) and today starts empty. The free version keeps meal records for the last 90 days and weight, workout and score records for the last year. Pro keeps records with no time limit.
 
-基本の計算・目標との比較・簡易履歴は、ずっと無料です。Pro は「もっと便利になる追加分」です。
+## 💎 Pro (one-time JPY 500)
 
-- 📈 **過去1か月（30日間）のグラフ** — カロリーの推移を、目標ラインつきでふり返れる
-- 🧮 **目標の自動計算** — 性別・年齢・身長・体重・活動レベル・目的から、目標カロリーと PFC を自動で設定
-- 🍱 **自分の食品を200件まで** — 無料版の5件から大きく増える
-- 🍙 **よく食べる組み合わせ** — いつもの朝ごはんをセットとして登録し、ワンタップで追加
-- 📄 **CSV 書き出し** — 今日の記録と履歴（体重つき）を、Excel でそのまま開ける形式（BOM付き UTF-8）で保存
-- 💪 **部位ごとの週のセット数** — 胸・背中・脚などの部位ごとに、直近7日のセット数を出す
-- 🎯 **あなた専用の必要カロリー** — 目標体重と期限を入れると、**実際に食べた量と体重の推移から**あなたの消費カロリーを逆算し、毎日の目標カロリーと PFC を自動で決める
-- 🔥 **今日のスコアと連続記録** — 食事・目標の達成・体重・筋トレでポイントがたまり、連続日数と自己ベストが伸びていく
+The basic calculation, comparison with your goals and the simple history are free forever. Pro adds extra conveniences.
 
-**一度買えば、ずっと使えます。** 月額料金はありません。
+- 📈 **30-day chart** — look back at your calorie trend with a target line
+- 🧮 **Automatic targets** — set target calories and PFC from your sex, age, height, weight, activity level and goal
+- 🍱 **Up to 200 of your own foods** — up from 5 in the free version
+- 🍙 **Favorite combinations** — save your usual breakfast as a set and add it in one tap
+- 📄 **CSV export** — save today's records and history (with weight) in a format Excel opens directly (UTF-8 with BOM)
+- 💪 **Weekly sets per muscle group** — the number of sets in the last 7 days for chest, back, legs and so on
+- 🎯 **Your personal calorie needs** — enter a target weight and deadline, and the app works backward from **what you actually ate and how your weight changed** to estimate your energy expenditure, then sets your daily calorie and PFC targets automatically
+- 🔥 **Daily score and streak** — earn points for meals, hitting goals, weight and workouts, and watch your streak and personal best grow
+- 🗂️ **Records kept with no time limit** — meals, weight, workouts and scores are never deleted for being old (the free version keeps 90 days of meals and 1 year of everything else)
 
-### 買い方
+**Buy once, use forever.** There is no monthly fee.
 
-1. アプリの下のほうにある「500円で Pro を購入する」を押す。
-2. 決済サービス **Stripe** の画面で、カード情報を入れて支払う。
-3. 自動でアプリに戻り、その場で Pro が有効になる。画面にあなたの**ライセンスキー**（`PFC1.` で始まる文字列）が表示される。
+### How to buy
 
-別のスマホやパソコンで使うときは、そのライセンスキーを「ライセンスキー・利用コード」の欄に貼り付けてください。キーは控えておくと安心です（ブラウザのデータを消すと、その端末からはキーも消えます）。
+1. Press "Buy Pro for JPY 500" near the bottom of the app.
+2. Pay with your card on a screen run by the payment service **Stripe**.
+3. You are returned to the app automatically and Pro turns on right away. Your **license key** (a string starting with `PFC1.`) is shown on screen.
 
-noteメンバーシップ「[寝坊ロケットの創作室](https://note.com/nebourocket/membership)」の会員特典の利用コードも、これまでどおり使えます。
+To use Pro on another phone or computer, paste the license key into the "License key / access code" field. Keep the key somewhere safe (if you clear the browser's data, the key disappears from that device too).
 
-## 🎯 あなた専用の必要カロリー（Pro）
+Access codes from the note membership "[寝坊ロケットの創作室](https://note.com/nebourocket/membership)" benefits still work as before.
 
-ふつうの計算ツールは、身長・体重・年齢から「平均的な人」の消費カロリーを出します。でも、同じ体格でも代謝や日々の活動量は人によってかなり違います。
+## 🎯 Your personal calorie needs (Pro)
 
-このアプリは、**あなた自身の記録**から逆算します。
+Ordinary calculators estimate the calories of an "average person" from height, weight and age. But metabolism and daily activity differ a lot between people, even with the same build.
 
-- 直近14日の平均摂取カロリーが 2,000kcal で、体重が週に 0.35kg ずつ減っていたら、消費は 2,000 ＋ 0.35÷7×7,700 ≒ **2,385kcal/日**。
-- そこから「目標体重まで、期限までに、週あたり何kg減らす（増やす）か」を決めて、毎日の目標カロリーを出します。
-- 基礎代謝の半分に満たない日は、記録の付け忘れとみなして計算から除きます。
-- 食事7日分・体重4回分（1週間以上）がたまるまでは、基礎代謝（Mifflin-St Jeor 式）× 活動レベルで代わりに計算します。
-- 体に無理のないよう、減量は体重の1%/週、増量は0.5%/週を上限にし、目標カロリーは基礎代謝を下回らないようにしています。
+This app works backward from **your own records**.
 
-記録が続くほど、あなたに合った数字になっていきます。
+- If your average intake over the last 14 days is 2,000 kcal and your weight is dropping 0.35 kg per week, your expenditure is 2,000 + 0.35 ÷ 7 × 7,700 ≈ **2,385 kcal/day**.
+- From there it decides how many kg per week you need to lose (or gain) to reach your target weight by your deadline, and calculates your daily target calories.
+- Days below half of your basal metabolic rate are treated as forgotten logging and left out of the calculation.
+- Until you have 7 days of meals and 4 weigh-ins (over at least a week), it uses basal metabolic rate (Mifflin-St Jeor equation) × activity level instead.
+- To keep things safe for your body, weight loss is capped at 1% of body weight per week and gain at 0.5% per week, and target calories never go below your basal metabolic rate.
 
-**トレ日と休養日で変える**こともできます。オンにすると、筋トレを記録した日は平均より最大10%多め、休養日はその分だけ少なめにして、1週間の平均は計画どおりにします（直近4週間の記録から週のトレ日数を数えます）。休養日が基礎代謝を下回りそうなときは、増減の幅を小さくします。運動で使う分は、実績から逆算した消費カロリーにもう入っているので、二重には数えません。増減はすべて炭水化物で行い、たんぱく質と脂質は変えません。
+The more you log, the better the numbers fit you.
 
-## 🔥 スコアと連続記録（Pro）
+You can also **vary targets between training days and rest days**. When it is on, days with a logged workout get up to 10% more than average and rest days get correspondingly less, so the weekly average stays on plan (training days per week are counted from the last 4 weeks of records). If a rest day would fall below your basal metabolic rate, the difference is made smaller. Calories burned in exercise are already included in the expenditure worked out from your records, so they are not counted twice. All the adjustment is made with carbs; protein and fat stay the same.
 
-1日100点満点で、毎日の積み重ねを見える形にします。
+## 🔥 Score and streak (Pro)
 
-- 食事を記録した（20点）
-- カロリーが目標の±10%以内（30点）
-- たんぱく質が目標の90%以上（20点）
-- 体重を記録した（15点）
-- 筋トレを記録した（15点）
+A 100-point daily score makes your day-to-day effort visible.
 
-50点以上の日が続くと「連続」が伸びます。自己ベストの連続日数と、これまでの累計ポイントも表示します。くらべる相手は昨日の自分なので、記録はすべて端末の中だけで完結します。
+- Logged meals (20 points)
+- Calories within ±10% of target (30 points)
+- Protein at 90% of target or more (20 points)
+- Logged weight (15 points)
+- Logged a workout (15 points)
 
-## 💾 バックアップ（無料）
+Your streak grows while you keep scoring 50 or more. Your best streak and your total points so far are shown too. You are only competing with yesterday's you, so everything stays on your device.
 
-記録はブラウザの中にだけあるので、「バックアップを書き出す」で JSON ファイルに保存できます。機種変更のときは、新しい端末で「バックアップを読み込む」を選べば、記録・目標・ライセンスキーまでまとめて戻ります。Pro はライセンスキーの署名を確かめたときだけ有効になり、キーの入っていない古いバックアップを読み込んでも、今の端末の Pro は消えません（noteメンバーシップの利用コードで Pro にしていた方は、新しい端末でコードをもう一度入力してください）。
+## 💾 Backup (free)
 
-## 🔒 セキュリティとプライバシー
+Your records exist only in your browser, so use "Export backup" to save them as a JSON file. When you change phones, choose "Import backup" on the new device and your records, goals and license key all come back together. Pro turns on only when the license key's signature checks out, and importing an old backup that has no key will not remove Pro on the current device (if you had Pro through a note membership access code, enter the code again on the new device).
 
-お金を扱う以上、「どこで何を扱っているか」をはっきりさせておきます。
+## 🔒 Security and privacy
 
-**カード情報は、このアプリにも作者にも一切届きません。**
+Since money is involved, here is exactly what is handled where.
 
-- カード番号の入力は、Stripe が運営する決済ページ（`buy.stripe.com`）でだけ行います。このアプリの画面にカードの入力欄はありません。
-- Stripe は、カード業界の最も厳しい基準（PCI DSS レベル1）の認定を受けた決済事業者です。
-- 支払いの確認に使うのは、Stripe の決済番号（Checkout Session ID）と「支払い済みか」「金額はいくらか」だけです。名前・メールアドレス・カード番号は受け取らず、保存もしません。
+**Card details never reach this app or its author.**
 
-**記録は端末の外に出ません。**
+- Card numbers are entered only on the payment page run by Stripe (`buy.stripe.com`). There is no card field in this app.
+- Stripe is certified at the strictest level of the payment card industry standard (PCI DSS Level 1).
+- To confirm a payment, only Stripe's checkout number (Checkout Session ID), whether it was paid and the amount are used. Names, email addresses and card numbers are neither received nor stored.
 
-- 食事・体重・筋トレの記録、目標、プロフィールは、ブラウザの localStorage にだけ保存します。
-- アプリが外と通信するのは、Pro を購入した直後に一度だけ、ライセンスキーを受け取るときだけです。
+**Your records never leave your device.**
 
-**改ざん・なりすましへの備え**
+- Meal, weight and workout records, goals and your profile are stored only in the browser's localStorage.
+- The app communicates with the outside only once, right after you buy Pro, to receive the license key.
 
-- ライセンスキーには電子署名（ECDSA P-256）がついています。署名の秘密鍵はライセンス発行サーバーの中にだけあり、キーを偽造することはできません。
-- 発行サーバーは、Stripe に「支払い済み・日本円・500円・この商品のリンク経由」のすべてがそろっていることを確かめてからキーを出します。
-- サイトには Content Security Policy を設定し、このサイト自身のファイル以外のスクリプトを読み込めないようにしています。外部のライブラリや解析タグは使っていません。
-- Stripe の秘密鍵は、読み取り専用に権限をしぼった「制限付きキー」を、Cloudflare の暗号化されたシークレットにだけ置いています。このリポジトリには入っていません。
+**Protection against tampering and impersonation**
 
-なお、このアプリは端末の中で動くので、ブラウザの開発者ツールでコードを書き換えれば Pro の画面を出すこと自体はできてしまいます。ここで守っているのは「お客様のお金とカード情報」であり、そちらには影響しません。気に入っていただけたら、ぜひ買って応援してください。
+- License keys carry a digital signature (ECDSA P-256). The private signing key exists only inside the license server, so keys cannot be forged.
+- The license server issues a key only after checking with Stripe that the payment is complete, in Japanese yen, JPY 500, and made through this product's payment link.
+- The site sets a Content Security Policy so that no scripts other than this site's own files can load. No external libraries or analytics tags are used.
+- The Stripe secret key is a "restricted key" limited to read-only permissions, stored only as an encrypted Cloudflare secret. It is not in this repository.
 
-脆弱性を見つけた方は、公開の Issue ではなく、[GitHub の Security タブ](https://github.com/nebourocket/pfc-calculator/security)からこっそり教えていただけると助かります。
+Because the app runs on your device, anyone can bring up the Pro screens by editing the code in the browser's developer tools. What is being protected here is "customers' money and card details", which is not affected by this. If you like the app, please support it by buying Pro.
 
-## 🏗️ 仕組み
+If you find a vulnerability, please report it privately through the [GitHub Security tab](https://github.com/nebourocket/pfc-calculator/security) rather than a public Issue.
 
-サーバー代をかけずに運営するため、すべて無料枠で動く構成にしています。
+## 🏗️ How it works
 
-- **アプリ本体** — GitHub Pages（静的サイト）。HTML・CSS・JavaScript だけで、ビルドも不要。
-- **決済** — Stripe Payment Link。決済ページは Stripe が用意し、カード情報はそこでだけ扱う。
-- **ライセンス発行** — Cloudflare Workers（[`worker/`](worker/)）。小さな関数が1つだけで、データベースも持たない。
-- **キーの確認** — アプリが公開鍵で署名を確かめる。一度有効になれば、オフラインでも使える。
+To run without server costs, everything uses free tiers.
 
-購入の流れは次のとおりです。
+- **App** — GitHub Pages (static site). Just HTML, CSS and JavaScript, with no build step.
+- **Payments** — Stripe Payment Link. Stripe provides the payment page, and card details are handled only there.
+- **License issuing** — Cloudflare Workers ([`worker/`](worker/)). A single small function, with no database.
+- **Key verification** — the app checks the signature with a public key. Once Pro is on, it works offline.
 
-1. アプリの購入ボタン → Stripe の決済ページ
-2. 支払いが終わると、Stripe が `?session_id=cs_...` をつけてアプリに戻す
-3. アプリはその番号を URL から消してから、ライセンス発行 Worker に渡す
-4. Worker が Stripe に支払い状態を問い合わせ、支払い済みなら署名つきのキーを返す
-5. アプリが署名を確かめて、Pro を有効にする
+The purchase flow is as follows.
 
-公開・運用の手順は、詳しくは [`docs/DEPLOY.md`](docs/DEPLOY.md) にまとめています。
+1. The app's buy button takes you to Stripe's payment page.
+2. After payment, Stripe sends you back to the app with `?session_id=cs_...` added.
+3. The app removes that number from the URL, then passes it to the license Worker.
+4. The Worker asks Stripe for the payment status and, if paid, returns a signed key.
+5. The app verifies the signature and turns on Pro.
 
-## 🥗 食品データについて
+Details of publishing and operation are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
-出典：「[日本食品標準成分表（八訂）増補2023年](https://www.mext.go.jp/a_menu/syokuhinseibun/mext_00001.html)」（文部科学省）を加工して作成
+## 🥗 About the food data
 
-成分表の Excel（正誤表 令和8年3月27日 反映済み）から、`tools/build_foods.py` で自動で作っています。数値を手で打たないので、写し間違いが起きません。カロリー・たんぱく質・脂質・炭水化物がそろっている全食品（2,537品）を収録し、各食品には成分表の食品番号と正式な名前を残してあります。よく使う106品には分かりやすい名前を付けて、最初から並べています。成分表の利用は[文部科学省ウェブサイト利用規約](https://www.mext.go.jp/b_menu/1351168.htm)に従っています（商用利用可・出典と加工の表示）。
+Source: Created by processing the "[Standard Tables of Food Composition in Japan (8th revision), 2023 Supplement](https://www.mext.go.jp/a_menu/syokuhinseibun/mext_00001.html)" (Ministry of Education, Culture, Sports, Science and Technology, Japan; MEXT)
 
-- 使っている項目：エネルギー（kcal）・たんぱく質・脂質・炭水化物（100g あたり）
+The data is generated automatically from the tables' Excel file (with the errata of March 27, Reiwa 8 applied) by `tools/build_foods.py`. Nothing is typed in by hand, so there are no copying mistakes. All foods that have calories, protein, fat and carbohydrate (2,537 foods) are included, and each keeps its food number and official name from the tables. 106 commonly used foods are given easy-to-read names and listed first. Use of the tables follows the [MEXT website terms of use](https://www.mext.go.jp/b_menu/1351168.htm) (commercial use allowed; credit the source and state that the data was processed).
 
-### 市販品（Open Food Facts）
+- Fields used: energy (kcal), protein, fat and carbohydrate (per 100 g)
 
-コンビニやスーパーで売られている市販品 **29,283品** は、[Open Food Facts](https://world.openfoodfacts.org/) のデータです。
+### Packaged products (Open Food Facts)
 
-Contains data from Open Food Facts, available under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). 個々の内容は [Database Contents License (DbCL) 1.0](https://opendatacommons.org/licenses/dbcl/1-0/) です。
+The **29,283 packaged products** sold in convenience stores and supermarkets come from [Open Food Facts](https://world.openfoodfacts.org/).
 
-- 公式のデータファイルから `tools/build_off_foods.py` で取り出しています（API をたくさん呼び出すことはしていません）。
-- 取り出す条件：日本で売られている・商品名に日本語がある・100g あたりの4項目がそろっている・カロリーが P×4＋F×9＋C×4 から 25% 以上ずれていない。重なりを除いた 29,283 品を、スキャン数の多い順に並べる。上位 5,000 品は `off-foods.js`（起動時に読む）、残り 24,283 品は `off-foods-more.js`（検索したときだけ読む）。
-- 取り出した `off-foods.js` と `off-foods-more.js` は ODbL で公開しています（自由に使えますが、使うときは同じ ODbL で公開してください）。成分表のデータ（`foods.js`）やアプリのコードとは別のファイルで、ODbL はこの2つのファイルだけにかかります。
-- 誰でも編集できるデータのため、誤りが含まれることがあります（1袋あたりの値が 100g あたりとして入っている、など）。気になるときは、商品のパッケージの栄養成分表示を確かめてください。
-- 調理方法や銘柄により前後します。
-- プロテインだけは成分表に無く、製品による差が大きいため、代表的なホエイプロテインの目安値です。
+Contains data from Open Food Facts, available under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Individual contents are under the [Database Contents License (DbCL) 1.0](https://opendatacommons.org/licenses/dbcl/1-0/).
 
-## 🧮 自動計算の前提（Pro）
+- The data is extracted from the official data file with `tools/build_off_foods.py` (the API is not called in bulk).
+- Extraction conditions: sold in Japan, has a Japanese product name, has all four per-100 g values, and calories are within 25% of P×4 + F×9 + C×4. The 29,283 products left after removing duplicates are sorted by scan count. The top 5,000 go into `off-foods.js` (loaded at startup) and the remaining 24,283 into `off-foods-more.js` (loaded only when you search).
+- The extracted `off-foods.js` and `off-foods-more.js` are published under the ODbL (you may use them freely, but if you do, you must publish them under the same ODbL). They are separate files from the food composition data (`foods.js`) and the app's code, and the ODbL applies only to these two files.
+- Because anyone can edit this data, it may contain errors (for example, a per-package value entered as a per-100 g value). If in doubt, check the nutrition label on the package.
+- Values vary with cooking method and brand.
+- Protein powder is not in the tables and varies a lot by product, so it is a typical whey protein estimate.
 
-- 基礎代謝（BMR）は Mifflin-St Jeor 式：男性＝10×体重(kg)＋6.25×身長(cm)−5×年齢＋5、女性＝同式−161。
-- 1日の消費目安（TDEE）＝BMR × 活動レベル（1.2／1.375／1.55／1.725）。
-- 目標カロリー：減量＝TDEEの−20%（ただしBMRは下回らない）、維持＝TDEE、増量＝TDEEの+10%。
-- PFCの目安：たんぱく質＝体重×2g、脂質＝目標カロリーの25%、炭水化物＝残り。
+## 🧮 Assumptions for automatic calculation (Pro)
 
-あくまで一般的な目安であり、医療・栄養指導ではありません。体調に不安がある方は専門家にご相談ください。
+- Basal metabolic rate (BMR) uses the Mifflin-St Jeor equation: men = 10 × weight (kg) + 6.25 × height (cm) − 5 × age + 5; women = the same formula − 161.
+- Daily energy expenditure (TDEE) = BMR × activity level (1.2 / 1.375 / 1.55 / 1.725).
+- Target calories: cutting = TDEE −20% (but never below BMR), maintaining = TDEE, bulking = TDEE +10%.
+- PFC guideline: protein = body weight × 2 g, fat = 25% of target calories, carbs = the rest.
 
-## 🛠️ 開発
+These are general guidelines only, not medical or nutrition advice. If you have health concerns, please consult a professional.
 
-依存パッケージはありません。Node.js 20 以上があればテストできます。
+## 🛠️ Development
+
+There are no dependencies. You can run the tests with Node.js 20 or later.
 
 ```bash
 node tests/smoke.test.js          # アプリ本体（簡易DOMで主要フロー・Pro・購入の流れを検証）
 node worker/test/license.test.mjs # ライセンス発行 Worker（Stripe への通信はフェイク）
 ```
 
-ファイルの役割は次のとおりです。
+What each file does:
 
-- `index.html` / `styles.css` / `app.js` / `foods.js` — アプリ本体
-- `i18n.js` — 表示言語（日本語・English・中文）の辞書と切り替え
-- `manifest.webmanifest` / `sw.js` / `icons/` — ホーム画面に追加するための設定・オフライン対応・アイコン（アイコンは Python で描いたもの）
-- `tools/build_foods.py` — 成分表の Excel から `foods.js` を作るスクリプト（`python3 -I tools/build_foods.py <Excel> foods.js`）
-- `tools/build_off_foods.py` / `off-foods.js` / `off-foods-more.js` — Open Food Facts のデータファイルから市販品を取り出すスクリプトと、その結果（ODbL）
-- `fonts/` / `tools/build_font_subset.py` — 見出し・大きな数字・はんこの手書き風フォント [Klee One](https://github.com/fontworks-fonts/Klee)（Fontworks、SIL Open Font License 1.1、`fonts/KleeOne-OFL.txt`）を、使う文字だけに絞ったもの（約40KB）。見出しなどの文字を変えたら作り直す
-- `config.js` — 公開してよい設定（Payment Link の URL・Worker の URL・公開鍵）
-- `legal.html` — 特定商取引法に基づく表記
-- `worker/` — ライセンス発行 Worker（Cloudflare Workers）
-- `docs/DEPLOY.md` — 公開・運用の手順
+- `index.html` / `styles.css` / `app.js` / `foods.js` — the app itself
+- `i18n.js` — the display-language dictionary (Japanese, English, Chinese) and switching
+- `manifest.webmanifest` / `sw.js` / `icons/` — settings for adding to the home screen, offline support and icons (the icons were drawn with Python)
+- `tools/build_foods.py` — script that builds `foods.js` from the food composition tables' Excel file (`python3 -I tools/build_foods.py <Excel> foods.js`)
+- `tools/build_off_foods.py` / `off-foods.js` / `off-foods-more.js` — the script that extracts packaged products from the Open Food Facts data file, and its output (ODbL)
+- `fonts/` / `tools/build_font_subset.py` — the handwriting-style font [Klee One](https://github.com/fontworks-fonts/Klee) (Fontworks, SIL Open Font License 1.1, `fonts/KleeOne-OFL.txt`) used for headings, large numbers and stamps, reduced to only the characters used (about 40 KB). Rebuild it when you change the characters in headings and similar text
+- `config.js` — settings that are safe to publish (Payment Link URL, Worker URL, public key)
+- `legal.html` — disclosure based on Japan's Specified Commercial Transactions Act
+- `worker/` — the license-issuing Worker (Cloudflare Workers)
+- `docs/DEPLOY.md` — publishing and operation steps
 
-## 📮 つくった人
+## 📮 About the author
 
-**寝坊ロケット**（nebourocket）— 詳しくは [note](https://note.com/nebourocket) で、開発の裏話や使い方のコツを書いています。
+**Nebou Rocket** (寝坊ロケット, nebourocket) — I write behind-the-scenes development stories and usage tips on [note](https://note.com/nebourocket).
 
-- 特定商取引法に基づく表記：[legal.html](https://nebourocket.github.io/pfc-calculator/legal.html)
+- Disclosure under Japan's Specified Commercial Transactions Act: [legal.html](https://nebourocket.github.io/pfc-calculator/legal.html)
