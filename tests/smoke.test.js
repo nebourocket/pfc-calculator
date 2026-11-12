@@ -1410,6 +1410,40 @@ function readProCode() {
       text(env, "toast").indexOf("データのバックアップ") !== -1);
   }
 
+  // ============ 使い方ガイド（4つの手順） ============
+  console.log("[使い方ガイド]");
+  {
+    const st = makeLocalStorage();
+    const env = launch(st);
+    const cls = (k) => byId(env, "guide-step-" + k).classList;
+    check("はじめては使い方ガイドを出す", !byId(env, "guide").classList.contains("hidden"));
+    check("最初の「次」は目標を決める", cls("goal").contains("is-next") && !cls("eat").contains("is-next") &&
+      text(env, "guide-next").indexOf("目標を決める") !== -1);
+    setVal(env, "grams-input", "150");
+    submit(env, "add-form");
+    check("食べたものを入れたら2番に印", cls("eat").contains("done") && cls("goal").contains("is-next"));
+    change(env, "target-kcal", "1800");
+    check("目標を変えたら1番に印、次はお皿", cls("goal").contains("done") && cls("check").contains("is-next"));
+    const st2 = makeLocalStorage();
+    const env2 = launch(st2);
+    byId(env2, "guide-go-goal").click();
+    check("目標はそのままでも、設定を開いたら1番に印", byId(env2, "guide-step-goal").classList.contains("done"));
+    const st3 = makeLocalStorage();
+    const env3 = launch(st3);
+    st3.setItem = () => { throw new Error("QuotaExceededError"); };
+    byId(env3, "guide-close").click();
+    check("保存できなくても「しまう」で閉じる", byId(env3, "guide").classList.contains("hidden"));
+    byId(env, "guide-go-check").click();
+    check("お皿を押したら3番に印、次は記録", cls("check").contains("done") && cls("log").contains("is-next"));
+    byId(env, "guide-close").click();
+    check("「しまう」で閉じる", byId(env, "guide").classList.contains("hidden"));
+    const again = launch(st);
+    check("しまったら次からは出さない", byId(again, "guide").classList.contains("hidden"));
+    check("押した手順は覚えている", byId(again, "guide-step-check").classList.contains("done"));
+    byId(again, "guide-open").click();
+    check("ヘッダーの「使い方」でもう一度出す", !byId(again, "guide").classList.contains("hidden"));
+  }
+
   // ============ はじめに（注意書き） ============
   console.log("[はじめに]");
   {
